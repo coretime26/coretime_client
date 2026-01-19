@@ -28,6 +28,16 @@ interface NavItem {
 const getNavItems = (role: UserRole): NavItem[] => {
     const common = [
         { label: '대시보드', icon: IconLayoutDashboard, link: '/' },
+        {
+            label: '회원 관리 (CRM)',
+            icon: IconUsers,
+            link: '/members',
+            children: [
+                { label: '회원 목록', link: '/members' },
+                { label: '수강권 현황', link: '/members/tickets' },
+                { label: '상담/메모 기록', link: '/members/consultations' },
+            ]
+        },
     ];
 
     if (role === 'OWNER') {
@@ -43,14 +53,7 @@ const getNavItems = (role: UserRole): NavItem[] => {
                     { label: '출석 체크', link: '/schedule/attendance' },
                 ]
             },
-            {
-                label: '회원 관리',
-                icon: IconUsers,
-                link: '/members',
-                children: [
-                    { label: '회원 목록', link: '/members' },
-                ]
-            },
+
             {
                 label: '매출 및 결제',
                 icon: IconReceipt2,

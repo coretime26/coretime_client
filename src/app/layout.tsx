@@ -9,6 +9,8 @@ import { ModalsProvider } from '@mantine/modals';
 import { theme } from '../theme';
 import { AuthProvider } from '@/context/AuthContext';
 import { SettingsProvider } from '@/context/SettingsContext';
+import { MemberProvider } from '@/context/MemberContext';
+import { FinanceProvider } from '@/context/FinanceContext';
 
 export const metadata = {
   title: 'CoreTime - Pilates Studio Management',
@@ -32,7 +34,11 @@ export default function RootLayout({
           <ModalsProvider>
             <AuthProvider>
               <SettingsProvider>
-                {children}
+                <FinanceProvider>
+                  <MemberProvider>
+                    {children}
+                  </MemberProvider>
+                </FinanceProvider>
               </SettingsProvider>
             </AuthProvider>
           </ModalsProvider>

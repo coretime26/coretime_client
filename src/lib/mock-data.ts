@@ -92,9 +92,12 @@ export interface Reservation {
     classTitle: string;
     instructorName: string;
     date: Date;
-    status: 'RESERVED' | 'CANCELED' | 'WAITING';
+    status: 'RESERVED' | 'CANCELED' | 'WAITING' | 'NOSHOW' | 'CANCELED_BY_ADMIN';
     attendanceStatus?: 'PRESENT' | 'LATE' | 'ABSENT' | 'NONE';
+    channel?: 'APP' | 'ADMIN';
     createdAt: Date;
+    updatedAt?: Date;
+    remainingTickets?: number; // Snapshot at time of reservation or dynamic check
 }
 
 // Center Alerts
@@ -311,3 +314,6 @@ export const getCenterAlerts = (): CenterAlert[] => [
     { id: 'ALERT_02', type: 'PAYMENT', severity: 'high', message: '미납 회원 2명', details: '연락 요망' },
     { id: 'ALERT_03', type: 'BIRTHDAY', severity: 'low', message: '오늘 생일: 김회원', details: '생일 쿠폰 발송' },
 ];
+// --- Exports for usage in pages ---
+export const CLASSES = getWeeklySchedule(new Date());
+export const RESERVATIONS = getReservations();
