@@ -4,23 +4,27 @@ import {
     Title, Text, Container, SimpleGrid, Card, Group,
     RingProgress, Center, ThemeIcon, Table, Progress,
     Badge, ActionIcon, Menu, Button, Tabs, Modal,
-    Select, TextInput, NumberInput
+    Select, TextInput, NumberInput, Divider, Radio, Stack, Alert
 } from '@mantine/core';
 import {
     IconTicket, IconAlertCircle, IconPlayerPause,
     IconCalendarTime, IconDotsVertical, IconPlus,
     IconClockPlay, IconSearch, IconFilter, IconDownload,
-    IconSortDescending, IconCheck
+    IconSortDescending, IconCheck, IconCreditCard, IconReceipt, IconCurrencyWon, IconUser
 } from '@tabler/icons-react';
 import { useMembers, Ticket, Member } from '@/context/MemberContext';
+import { useFinance } from '@/context/FinanceContext';
 import { notifications } from '@mantine/notifications';
 import { useState, useMemo, useEffect } from 'react';
 import dayjs from 'dayjs';
 import { DatePickerInput } from '@mantine/dates';
 import { useDisclosure } from '@mantine/hooks';
+import { useRouter } from 'next/navigation';
 
 export default function TicketManagementPage() {
-    const { tickets, members, pauseTicket, addTicket, updateTicket } = useMembers();
+    const { tickets, members, pauseTicket, addTicket, updateTicket } = useMembers(); // BA = Typo in context? No, just destructuring
+    const { transactions, updateTransaction } = useFinance();
+    const router = useRouter();
 
     // Modals
     const [registerOpened, { open: openRegister, close: closeRegister }] = useDisclosure(false);
@@ -30,17 +34,20 @@ export default function TicketManagementPage() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [editMode, setEditMode] = useState<'ADD_COUNT' | 'EXTEND'>('ADD_COUNT');
 
-    // Register Form State (Simple local state)
+    // Register Form State
     const [newTicketData, setNewTicketData] = useState({
         memberId: '',
         name: '1:1 PT 10회',
         totalCount: 10,
         startDate: new Date(),
-        endDate: dayjs().add(1, 'year').toDate() // Default 1 year
+        endDate: dayjs().add(1, 'year').toDate()
     });
 
+    // Pre-paid activation state
+    const [selectedPrePaidTxId, setSelectedPrePaidTxId] = useState<string | null>(null);
+
     // Edit Form State
-    const [editValue, setEditValue] = useState<number | Date | null>(null); // Number for count, Date for extension
+    const [editValue, setEditValue] = useState<number | Date | null>(null);
 
     // Stats
     const expiringSoon = tickets.filter(t => {
@@ -57,7 +64,7 @@ export default function TicketManagementPage() {
     // --- Filtering & Sorting ---
     const [filterType, setFilterType] = useState<string | null>('ALL'); // ALL, EXPIRING, LOW_BALANCE, PAUSED
     const [search, setSearch] = useState('');
-    const [sortOrder, setSortOrder] = useState<string>('NAME_ASC'); // NAME_ASC, REG_DESC, REMAINING_ASC, REMAINING_DESC
+    const [sortOrder, setSortOrder] = useState<string>('NAME_ASC');
 
     const filteredTickets = useMemo(() => {
         return tickets.filter(t => {
@@ -81,7 +88,6 @@ export default function TicketManagementPage() {
             if (sortOrder === 'NAME_ASC') {
                 return getMemberName(a.memberId).localeCompare(getMemberName(b.memberId));
             } else if (sortOrder === 'REG_DESC') {
-                // Assuming ID orStartDate is proxy for registration order - using startDate
                 return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
             } else if (sortOrder === 'REMAINING_ASC') {
                 return a.remainingCount - b.remainingCount;
@@ -91,6 +97,36 @@ export default function TicketManagementPage() {
             return 0;
         });
     }, [tickets, filterType, search, sortOrder, members]);
+
+    // Available pre-paid transactions for selected member
+    const availableTransactions = useMemo(() => {
+        if (!newTicketData.memberId) return [];
+        return transactions.filter(tx =>
+            tx.memberId === newTicketData.memberId &&
+            tx.status === 'PAID' &&
+            !tx.linkedTicketId
+        );
+    }, [newTicketData.memberId, transactions]);
+
+    useEffect(() => {
+        // Reset pre-paid selection when member changes
+        setSelectedPrePaidTxId(null);
+    }, [newTicketData.memberId]);
+
+    const handlePrePaidSelect = (txId: string) => {
+        setSelectedPrePaidTxId(txId === selectedPrePaidTxId ? null : txId); // Toggle logic
+        const tx = transactions.find(t => t.id === txId);
+        if (tx && txId !== selectedPrePaidTxId) {
+            // Auto-fill from transaction product info
+            setNewTicketData(prev => ({
+                ...prev,
+                name: tx.productName,
+                // Defaults, user can edit
+            }));
+
+            notifications.show({ title: '결제 정보 선택 완료', message: '하단에서 세부 내용을 확인하고 활성화하세요.', color: 'blue', icon: <IconCheck size={16} /> });
+        }
+    };
 
     const handleExcelDownload = () => {
         notifications.show({
@@ -104,12 +140,22 @@ export default function TicketManagementPage() {
     // --- Action Handlers ---
 
     const handleRegister = () => {
+        // Validation
         if (!newTicketData.memberId) {
             notifications.show({ title: '오류', message: '회원을 선택해주세요.', color: 'red' });
             return;
         }
+        if (!selectedPrePaidTxId) {
+            notifications.show({ title: '오류', message: '활성화할 결제 내역(수강권)을 선택해야 합니다.', color: 'red' });
+            return;
+        }
+        if (!newTicketData.name) {
+            notifications.show({ title: '오류', message: '수강권 이름을 입력해주세요.', color: 'red' });
+            return;
+        }
 
-        addTicket({
+        // 1. Create Ticket
+        const newTicket = addTicket({
             memberId: newTicketData.memberId,
             name: newTicketData.name,
             totalCount: newTicketData.totalCount,
@@ -119,9 +165,26 @@ export default function TicketManagementPage() {
             status: 'ACTIVE'
         });
 
-        notifications.show({ title: '등록 완료', message: '수강권이 성공적으로 등록되었습니다.', color: 'green', icon: <IconCheck size={18} /> });
+        // 2. Link Transaction
+        updateTransaction(selectedPrePaidTxId, { linkedTicketId: newTicket.id });
+
+        notifications.show({
+            title: '활성화 완료',
+            message: '수강권이 성공적으로 활성화되었습니다.',
+            color: 'green',
+            icon: <IconCheck size={18} />
+        });
+
         closeRegister();
-        // Reset form defaults if needed
+        // Reset defaults
+        setNewTicketData({
+            memberId: '',
+            name: '1:1 PT 10회',
+            totalCount: 10,
+            startDate: new Date(),
+            endDate: dayjs().add(1, 'year').toDate()
+        });
+        setSelectedPrePaidTxId(null);
     };
 
     const openEditModal = (ticket: Ticket, mode: 'ADD_COUNT' | 'EXTEND') => {
@@ -325,43 +388,143 @@ export default function TicketManagementPage() {
             </Card>
 
             {/* Register Modal */}
-            <Modal opened={registerOpened} onClose={closeRegister} title="수강권 등록" size="md">
-                <Select
-                    label="회원 선택"
-                    placeholder="회원을 선택하세요"
-                    data={members.map(m => ({ value: m.id, label: `${m.name} (${m.phone})` }))}
-                    searchable
-                    mb="sm"
-                    value={newTicketData.memberId}
-                    onChange={(v) => setNewTicketData({ ...newTicketData, memberId: v || '' })}
-                    required
-                />
-                <TextInput
-                    label="수강권 명"
-                    placeholder="예: 1:1 PT 10회"
-                    mb="sm"
-                    value={newTicketData.name}
-                    onChange={(e) => setNewTicketData({ ...newTicketData, name: e.currentTarget.value })}
-                />
-                <NumberInput
-                    label="총 횟수"
-                    mb="sm"
-                    value={newTicketData.totalCount}
-                    onChange={(v) => setNewTicketData({ ...newTicketData, totalCount: Number(v) })}
-                />
-                <Group grow mb="lg">
-                    <DatePickerInput
-                        label="시작일"
-                        value={newTicketData.startDate}
-                        onChange={(v) => setNewTicketData({ ...newTicketData, startDate: (v as any) || new Date() })}
-                    />
-                    <DatePickerInput
-                        label="종료일"
-                        value={newTicketData.endDate}
-                        onChange={(v) => setNewTicketData({ ...newTicketData, endDate: (v as any) || new Date() })}
-                    />
+            <Modal opened={registerOpened} onClose={closeRegister} title={
+                <Group gap="xs">
+                    <IconTicket size={20} color="var(--mantine-color-blue-6)" />
+                    <Text fw={700}>수강권 등록 (Payment-Linked)</Text>
                 </Group>
-                <Button fullWidth onClick={handleRegister}>등록하기</Button>
+            } size="lg">
+                <Stack>
+                    {/* 1. Member Select */}
+                    <div>
+                        <Text size="sm" fw={600} mb={4}>1. 회원 선택</Text>
+                        <Select
+                            placeholder="이름 또는 전화번호로 검색"
+                            data={members.map(m => ({ value: m.id, label: `${m.name} (${m.phone})` }))}
+                            searchable
+                            value={newTicketData.memberId}
+                            onChange={(v) => setNewTicketData({ ...newTicketData, memberId: v || '' })}
+                            required
+                            size="md"
+                            nothingFoundMessage="회원을 찾을 수 없습니다."
+                            leftSection={<IconUser size={16} />}
+                        />
+                    </div>
+
+                    {/* 2. Transaction Grid */}
+                    {newTicketData.memberId && (
+                        <div>
+                            <Group justify="space-between" mb="xs">
+                                <Text size="sm" fw={600}>2. 결제 내역 선택 (수강권 대상)</Text>
+                                {availableTransactions.length > 0 &&
+                                    <Badge variant="light" color="blue">{availableTransactions.length}건 발견</Badge>
+                                }
+                            </Group>
+
+                            {availableTransactions.length > 0 ? (
+                                <SimpleGrid cols={2} spacing="sm">
+                                    {availableTransactions.map(tx => {
+                                        const isSelected = selectedPrePaidTxId === tx.id;
+                                        return (
+                                            <Card
+                                                key={tx.id}
+                                                withBorder={!isSelected}
+                                                padding="sm"
+                                                radius="md"
+                                                style={{
+                                                    cursor: 'pointer',
+                                                    border: isSelected ? '2px solid var(--mantine-color-blue-6)' : undefined,
+                                                    backgroundColor: isSelected ? 'var(--mantine-color-blue-0)' : 'var(--mantine-color-gray-0)',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                                onClick={() => handlePrePaidSelect(tx.id)}
+                                            >
+                                                <Group justify="space-between" mb="xs">
+                                                    <Badge color={isSelected ? 'blue' : 'gray'} variant="light">
+                                                        {dayjs(tx.paidAt).format('YYYY.MM.DD')}
+                                                    </Badge>
+                                                    {isSelected && <ThemeIcon color="blue" radius="xl" size="sm"><IconCheck size={12} /></ThemeIcon>}
+                                                </Group>
+                                                <Text fw={700} size="md" mb={2} lineClamp={1}>{tx.productName}</Text>
+                                                <Group justify="space-between" align="center" mt="sm">
+                                                    <Text size="xs" c="dimmed">결제금액</Text>
+                                                    <Text fw={600} c="blue">{tx.amount.toLocaleString()}원</Text>
+                                                </Group>
+                                            </Card>
+                                        );
+                                    })}
+                                </SimpleGrid>
+                            ) : (
+                                <Alert color="orange" icon={<IconAlertCircle size={16} />} title="사용 가능한 수강권 없음" variant="light">
+                                    선택한 회원의 결제 내역 중 <Text span fw={700}>활성화 가능한 수강권</Text>이 없습니다.
+                                    <br />
+                                    <Text size="xs" mt={4}>
+                                        * 수강권 등록을 위해서는 먼저 결제 페이지에서 상품을 결제해야 합니다.
+                                    </Text>
+                                    <Button
+                                        variant="outline" color="orange" size="xs" mt="sm" fullWidth
+                                        onClick={() => router.push('/finance/payments')}
+                                    >
+                                        결제 페이지로 이동
+                                    </Button>
+                                </Alert>
+                            )}
+                        </div>
+                    )}
+
+                    {!newTicketData.memberId && (
+                        <Center p="xl" bg="gray.0" style={{ borderRadius: 8, borderStyle: 'dashed', borderWidth: 1, borderColor: '#ccc' }}>
+                            <Stack align="center" gap="xs">
+                                <IconSearch size={32} color="gray" />
+                                <Text c="dimmed" size="sm">회원을 먼저 선택해주세요.</Text>
+                            </Stack>
+                        </Center>
+                    )}
+
+                    <Divider />
+
+                    {/* 3. Ticket Details Form (Only shows when TX selected) */}
+                    <div style={{ opacity: selectedPrePaidTxId ? 1 : 0.4, pointerEvents: selectedPrePaidTxId ? 'auto' : 'none', transition: 'opacity 0.2s' }}>
+                        <Text size="sm" fw={600} mb="xs">3. 활성화 세부 설정</Text>
+                        <Card withBorder bg="gray.0" mb="md">
+                            <Stack gap="sm">
+                                <TextInput
+                                    label="수강권 명"
+                                    value={newTicketData.name}
+                                    onChange={(e) => setNewTicketData({ ...newTicketData, name: e.currentTarget.value })}
+                                />
+                                <NumberInput
+                                    label="총 횟수"
+                                    value={newTicketData.totalCount}
+                                    onChange={(v) => setNewTicketData({ ...newTicketData, totalCount: Number(v) })}
+                                />
+                                <Group grow>
+                                    <DatePickerInput
+                                        label="시작일"
+                                        value={newTicketData.startDate}
+                                        onChange={(v) => setNewTicketData({ ...newTicketData, startDate: (v as any) || new Date() })}
+                                    />
+                                    <DatePickerInput
+                                        label="종료일"
+                                        value={newTicketData.endDate}
+                                        onChange={(v) => setNewTicketData({ ...newTicketData, endDate: (v as any) || new Date() })}
+                                    />
+                                </Group>
+                            </Stack>
+                        </Card>
+                    </div>
+
+                    <Button
+                        fullWidth
+                        size="md"
+                        onClick={handleRegister}
+                        disabled={!selectedPrePaidTxId}
+                        color={selectedPrePaidTxId ? 'blue' : 'gray'}
+                        leftSection={<IconCheck size={20} />}
+                    >
+                        {selectedPrePaidTxId ? '수강권 활성화 (등록)' : '결제 내역을 선택해주세요'}
+                    </Button>
+                </Stack>
             </Modal>
 
             {/* Edit Modal */}
@@ -399,6 +562,7 @@ export default function TicketManagementPage() {
     );
 }
 
+// Helper component
 function StatCard({ label, value, icon: Icon, color, active, onClick }: any) {
     return (
         <Card

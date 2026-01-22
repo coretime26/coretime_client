@@ -50,7 +50,7 @@ interface MemberContextType {
     updateMember: (id: TSID, data: Partial<Member>) => void;
 
     // Ticket Actions
-    addTicket: (ticket: Omit<Ticket, 'id'>) => void;
+    addTicket: (ticket: Omit<Ticket, 'id'>) => Ticket;
     updateTicket: (id: TSID, data: Partial<Ticket>) => void;
     pauseTicket: (id: TSID, paused: boolean) => void;
 
@@ -108,6 +108,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
     const addTicket = (ticket: Omit<Ticket, 'id'>) => {
         const newTicket = { ...ticket, id: generateId('TICKET') };
         setTickets(prev => [...prev, newTicket]);
+        return newTicket;
     };
 
     const updateTicket = (id: TSID, data: Partial<Ticket>) => {

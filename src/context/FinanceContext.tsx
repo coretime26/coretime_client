@@ -28,6 +28,7 @@ export interface Transaction {
     method: 'CARD' | 'CASH' | 'TRANSFER';
     status: 'PAID' | 'REFUNDED';
     paidAt: Date;
+    linkedTicketId?: TSID; // If activated immediately or later
 }
 
 interface FinanceContextType {
@@ -44,8 +45,11 @@ interface FinanceContextType {
         memberId: TSID,
         memberName: string,
         productId: TSID,
-        method: 'CARD' | 'CASH' | 'TRANSFER'
+        method: 'CARD' | 'CASH' | 'TRANSFER',
+        linkedTicketId?: TSID // Optional, for immediate activation
     ) => Transaction; // Returns the created tx
+
+    updateTransaction: (id: TSID, data: Partial<Transaction>) => void;
 }
 
 // --- Initial Data ---
@@ -58,8 +62,8 @@ const MOCK_PRODUCTS: TicketProduct[] = [
 ];
 
 const MOCK_TRANSACTIONS: Transaction[] = [
-    { id: 'TX_01', memberId: 'USER_01', memberName: '김철수', productId: 'PROD_03', productName: '그룹 레슨 1개월', amount: 150000, method: 'CARD', status: 'PAID', paidAt: new Date(2025, 0, 15) },
-    { id: 'TX_02', memberId: 'USER_02', memberName: '이영희', productId: 'PROD_01', productName: '1:1 필라테스 10회', amount: 700000, method: 'TRANSFER', status: 'PAID', paidAt: new Date(2025, 0, 18) },
+    { id: 'TX_01', memberId: 'MEM_1', memberName: 'User 1', productId: 'PROD_03', productName: '그룹 레슨 1개월', amount: 150000, method: 'CARD', status: 'PAID', paidAt: new Date(2025, 0, 15) },
+    { id: 'TX_02', memberId: 'MEM_2', memberName: 'User 2', productId: 'PROD_01', productName: '1:1 필라테스 10회', amount: 700000, method: 'TRANSFER', status: 'PAID', paidAt: new Date(2025, 0, 18) },
 ];
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -91,7 +95,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         memberId: TSID,
         memberName: string,
         productId: TSID,
-        method: 'CARD' | 'CASH' | 'TRANSFER'
+        method: 'CARD' | 'CASH' | 'TRANSFER',
+        linkedTicketId?: TSID
     ) => {
         const product = products.find(p => p.id === productId);
         if (!product) throw new Error('Product not found');
@@ -106,16 +111,22 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             method,
             status: 'PAID',
             paidAt: new Date(),
+            linkedTicketId
         };
 
         setTransactions(prev => [newTx, ...prev]);
         return newTx;
     };
 
+    const updateTransaction = (id: TSID, data: Partial<Transaction>) => {
+        setTransactions(prev => prev.map(tx => tx.id === id ? { ...tx, ...data } : tx));
+    };
+
     const value = {
         products, transactions,
         addProduct, updateProduct, toggleProductStatus,
-        processPayment
+        processPayment,
+        updateTransaction
     };
 
     return (
