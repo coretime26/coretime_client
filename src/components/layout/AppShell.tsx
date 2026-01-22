@@ -60,7 +60,7 @@ const getNavItems = (role: UserRole): NavItem[] => {
                 link: '/finance',
                 children: [
                     { label: '수강권 관리', link: '/finance/tickets' },
-                    { label: '수강권 생성', link: '/finance/tickets/create' },
+                    // { label: '수강권 생성', link: '/finance/tickets/create' },
                     { label: '결제/미수금', link: '/finance/payments' },
                     { label: '매출 통계', link: '/finance/stats' },
                 ]
