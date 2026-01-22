@@ -153,7 +153,7 @@ export default function ConsultationLogsPage() {
                     <DatePickerInput
                         label="상담 일시"
                         value={formData.date}
-                        onChange={(v) => setFormData({ ...formData, date: v || new Date() })}
+                        onChange={(v) => setFormData({ ...formData, date: (v as any) || new Date() })}
                     />
                     <TextInput
                         label="작성자"
@@ -167,12 +167,6 @@ export default function ConsultationLogsPage() {
                     placeholder="태그를 입력하거나 선택하세요"
                     data={['#신규상담', '#재등록', '#통증케어', '#다이어트', '#불만사항', '#결석']}
                     searchable
-                    creatable
-                    getCreateLabel={(query) => `+ Create ${query}`}
-                    onCreate={(query) => {
-                        // In a real app we'd add this to the options list dynamically
-                        return query;
-                    }}
                     mb="sm"
                     value={formData.tags}
                     onChange={(v) => setFormData({ ...formData, tags: v })}
