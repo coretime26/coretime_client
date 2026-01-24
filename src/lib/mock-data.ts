@@ -3,7 +3,7 @@
 // --- Types ---
 
 export type TSID = string;
-export type UserRole = 'OWNER' | 'INSTRUCTOR';
+export type UserRole = 'OWNER' | 'INSTRUCTOR' | 'MEMBER' | 'SYSTEM_ADMIN';
 
 // Shared User Interface
 export interface User {

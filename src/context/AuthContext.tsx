@@ -4,12 +4,12 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 import { useRouter } from 'next/navigation';
 import { authApi, clearTokens, OAuth2LoginCommand, SignUpCommand } from '@/lib/api';
 
-export type UserRole = 'OWNER' | 'INSTRUCTOR' | null;
+export type UserRole = 'OWNER' | 'INSTRUCTOR' | 'MEMBER' | 'SYSTEM_ADMIN' | null;
 
 interface User {
-    id: number;
+    id: number | string;
     name: string;
-    email: string;
+    email: string; // Keeping email for app compatibility, but might be empty if backend doesn't send it
     phone?: string;
     role: UserRole;
     organizationId?: number | null;
@@ -42,22 +42,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Check auth on mount
     useEffect(() => {
-        checkAuth();
+        // Handle URL Tokens (if redirected to root)
+        const params = new URLSearchParams(window.location.search);
+        const accessToken = params.get('accessToken');
+        const refreshToken = params.get('refreshToken');
+        const organizationId = params.get('organizationId');
+        const signupTokenUrl = params.get('signupToken');
+        const isSignUpRequired = params.get('isSignUpRequired') === 'true';
+
+        if (accessToken && refreshToken) {
+            localStorage.setItem('accessToken', accessToken);
+            localStorage.setItem('refreshToken', refreshToken);
+            if (organizationId) {
+                localStorage.setItem('organizationId', organizationId);
+            }
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            checkAuth();
+        } else if (isSignUpRequired && signupTokenUrl) {
+            // Pass params to identity page
+            const name = params.get('name');
+            const email = params.get('email');
+            const nextParams = new URLSearchParams();
+            if (name) nextParams.append('name', name);
+            if (email) nextParams.append('email', email);
+            nextParams.append('signupToken', signupTokenUrl);
+
+            router.push(`/identity?${nextParams.toString()}`);
+            setIsLoading(false); // Stop loading to allow redirect
+        } else {
+            checkAuth();
+        }
     }, []);
 
     const checkAuth = async () => {
         try {
             const me = await authApi.getMe();
+            console.log('[Auth] User Identity:', me.identity); // Debug log
+
             setUser({
-                id: me.id,
+                id: me.accountId,
                 name: me.name,
-                email: me.email,
-                role: me.role === 'OWNER' ? 'OWNER' : (me.role === 'INSTRUCTOR' || me.role === 'STAFF' as any) ? 'INSTRUCTOR' : null,
-                status: 'ACTIVE' // Simplified, 'me' might need to return status
+                email: '', // Backend MeResult DTO does not have email.
+                role: me.identity as UserRole, // Direct mapping as requested
+                status: 'ACTIVE',
+                organizationId: me.organizationId
             });
         } catch (error) {
-            // failed to get me, clear tokens
-            // clearTokens(); // Only clear if 401? handled by interceptor
+            // Check if existing tokens are invalid
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                // Token existed but getMe failed (expired/invalid)
+                // Optionally clear tokens here if we want to force logout on any error
+            }
             setUser(null);
         } finally {
             setIsLoading(false);

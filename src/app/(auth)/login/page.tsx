@@ -56,16 +56,18 @@ export default function LoginPage() {
                     </Stack>
 
                     {/* Main Actions */}
+                    {/* Main Actions */}
                     <Stack w="100%" gap={12}>
-                        {/* Kakao Button - Standard Sleek */}
+                        {/* Kakao Button */}
                         <Button
                             fullWidth
-                            h={48} // Standard 48px height (not too thick)
+                            h={48}
                             bg="#FEE500"
                             c="#191919"
+                            component="a"
+                            href={`https://core.api-talkterview.com/oauth2/authorization/kakao?centerId=owner&clientUrl=${process.env.NEXT_PUBLIC_CLIENT_URL}`}
                             leftSection={<KakaoIcon style={{ width: 18, height: 18, position: 'relative', top: 1 }} />}
-                            onClick={() => login('kakao')}
-                            radius="md" // 8px radius
+                            radius="md"
                             styles={{
                                 root: { border: 'none' },
                                 label: { fontWeight: 600, fontSize: '15px' },
@@ -75,14 +77,15 @@ export default function LoginPage() {
                             카카오로 시작하기
                         </Button>
 
-                        {/* Google Button - Standard Sleek */}
+                        {/* Google Button */}
                         <Button
                             fullWidth
                             h={48}
                             bg="#ffffff"
                             c="#3c4043"
+                            component="a"
+                            href={`https://core.api-talkterview.com/oauth2/authorization/google?centerId=owner&clientUrl=${process.env.NEXT_PUBLIC_CLIENT_URL}`}
                             leftSection={<GoogleIcon style={{ width: 20, height: 20, position: 'relative', top: 0 }} />}
-                            onClick={() => login('google')}
                             radius="md"
                             variant="default"
                             styles={{

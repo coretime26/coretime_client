@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Title, Container, Grid, SegmentedControl, Group, Text, Box, Stack } from '@mantine/core';
 import { StatsGrid } from '@/components/dashboard/StatsGrid';
 import { InstructorApprovalList } from '@/components/dashboard/InstructorApprovalList';
@@ -14,14 +14,47 @@ import {
     getCenterAlerts
 } from '@/lib/mock-data';
 
+import { useAuth } from '@/context/AuthContext';
+import { LoadingOverlay, Button } from '@mantine/core';
+
 export default function DashboardPage() {
+    const { user, isLoading } = useAuth();
     const [role, setRole] = useState<UserRole>('OWNER');
+
+    useEffect(() => {
+        if (user?.role) {
+            setRole(user.role);
+        }
+    }, [user]);
 
     // Load mock data
     const stats = getMockStats();
     const pendingInstructors = getPendingInstructors();
     const activities = getRecentActivity(role);
     const alerts = getCenterAlerts();
+
+    if (isLoading) return <LoadingOverlay visible />;
+
+    if (!user) {
+        return (
+            <Container p="xl">
+                <Stack align="center" mt="xl">
+                    <Text>로그인이 필요합니다.</Text>
+                    <Button component="a" href="/login">로그인 하기</Button>
+                </Stack>
+            </Container>
+        );
+    }
+
+    // Safety check if user is logged in but has no role (registration incomplete)
+    if (!user.role) {
+        // Should redirect or show something else
+        return (
+            <Container p="xl">
+                <Text>회원가입이 완료되지 않았습니다.</Text>
+            </Container>
+        )
+    }
 
     return (
         <Container fluid p="md">

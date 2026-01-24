@@ -2,6 +2,15 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // --- Types ---
 
+export interface ApiResponse<T> {
+    success: boolean;
+    data: T;
+    error?: {
+        code: string;
+        message: string;
+    };
+}
+
 export interface OAuth2LoginCommand {
     provider: 'google' | 'kakao';
     providerId: string;
@@ -15,8 +24,8 @@ export interface OAuth2LoginResult {
     signupToken?: string;
     accessToken?: string;
     refreshToken?: string;
-    accountId?: number;
-    identity?: 'OWNER' | 'INSTRUCTOR' | 'MEMBER'; // Adjusted "STAFF" to "INSTRUCTOR" based on context files, but spec said STAFF. Will check.
+    accountId?: string | number; // Updated: might be string or number
+    identity?: 'OWNER' | 'INSTRUCTOR' | 'MEMBER';
     isPending?: boolean;
     organizationId?: number;
 }
@@ -50,16 +59,18 @@ export interface ReissueTokenResult {
 }
 
 export interface MeResult {
-    id: number;
+    accountId: string; // Updated to string as per JSON example, though DTO says Long (serialized as string often)
     name: string;
-    email: string;
-    role: 'OWNER' | 'INSTRUCTOR' | 'MEMBER';
-    // Add other fields as returned by /auth/me
+    identity: 'OWNER' | 'INSTRUCTOR' | 'MEMBER' | 'SYSTEM_ADMIN';
+    organizationId: number | null;
+    organizationName: string | null;
+    profileImageUrl?: string | null;
 }
 
 // --- API Client ---
 
 const BASE_URL = 'https://core.api-talkterview.com/api/v1';
+// const BASE_URL = 'http://localhost:8080/api/v1';
 
 const api = axios.create({
     baseURL: BASE_URL,
@@ -87,8 +98,14 @@ export const clearTokens = () => {
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const token = getAccessToken();
-        if (token && config.headers) {
+        if (token) {
+            if (!config.headers) {
+                config.headers = {} as any; // safe cast for Axios headers
+            }
+            console.log('[API] Attaching Token:', token.substring(0, 10) + '...');
             config.headers.Authorization = `Bearer ${token}`;
+        } else {
+            console.log('[API] No Token found in localStorage');
         }
         return config;
     },
@@ -110,17 +127,25 @@ api.interceptors.response.use(
             if (refreshToken && accessToken) {
                 try {
                     // Call Reissue Endpoint
-                    const { data } = await axios.post<ReissueTokenResult>(`${BASE_URL}/auth/reissue`, {
+                    // Note: Reissue might return nested data too depending on implementation, 
+                    // but typically simple auth endpoints might be direct or wrapped. Assuming wrapped for safety or checking.
+                    // Let's assume standard API wrapper for all 'api/v1' endpoints.
+                    const { data } = await axios.post<ApiResponse<ReissueTokenResult>>(`${BASE_URL}/auth/reissue`, {
                         accessToken,
                         refreshToken,
                     });
 
+                    // Unwrap if wrapped
+                    const newTokens = data.data || data;
+                    // @ts-ignore - handling both wrapped and direct just in case fallback
+                    const finalTokens = newTokens.accessToken ? newTokens : data;
+
                     // Save new tokens
-                    setTokens(data.accessToken, data.refreshToken);
+                    setTokens((finalTokens as any).accessToken, (finalTokens as any).refreshToken);
 
                     // Retry original request
                     if (originalRequest.headers) {
-                        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+                        originalRequest.headers.Authorization = `Bearer ${(finalTokens as any).accessToken}`;
                     }
                     return api(originalRequest);
                 } catch (refreshError) {
@@ -132,7 +157,7 @@ api.interceptors.response.use(
             } else {
                 // No tokens to refresh
                 clearTokens();
-                // Only redirect if not already on login page to avoid loops?
+                // Only redirect if not already on login page?
                 // window.location.href = '/login'; 
             }
         }
@@ -155,61 +180,110 @@ export interface OrganizationDto {
     address: string;
     phone?: string;
     representativeName?: string;
+    status?: 'ACTIVE' | 'PENDING' | 'REJECTED';
 }
 
 export interface InviteCodeResult {
     code: string;
-    expireAt: string; // or Date/Instant
+    expireAt: string;
     remainingSeconds: number;
+}
+
+export interface InstructorDto {
+    membershipId: number;
+    accountId: string | number; // Updated
+    name: string;
+    email: string;
+    phone: string;
+    status: 'ACTIVE' | 'PENDING_APPROVAL' | 'INACTIVE' | 'WITHDRAWN';
+    joinedAt?: string;
 }
 
 // --- API Functions ---
 
 export const authApi = {
+    // 1. Auth & Account
     login: async (command: OAuth2LoginCommand) => {
-        const response = await api.post<OAuth2LoginResult>('/auth/login', command);
-        return response.data;
+        const response = await api.post<ApiResponse<OAuth2LoginResult>>('/auth/login', command);
+        return response.data.data;
+    },
+    signUp: async (command: SignUpCommand) => {
+        const response = await api.post<ApiResponse<SignUpResult>>('/auth/signup', command);
+        return response.data.data;
+    },
+    getMe: async () => {
+        const response = await api.get<ApiResponse<MeResult>>('/auth/me');
+        return response.data.data; // Unwrapping data
+    },
+    logout: async () => {
+        await api.post('/auth/logout');
+    },
+    reissue: async (refreshToken: string) => {
+        const response = await api.post<ApiResponse<ReissueTokenResult>>('/auth/reissue', { refreshToken });
+        return response.data.data;
     },
 
+    // 2. Invite Code Validation
     validateInviteCode: async (code: string) => {
-        const response = await api.get<InviteCodeValidationResult>('/invite-codes/validate', {
+        const response = await api.get<ApiResponse<InviteCodeValidationResult>>('/invite-codes/validate', {
             params: { code }
         });
-        return response.data;
+        return response.data.data;
     },
 
-    signUp: async (command: SignUpCommand) => {
-        const response = await api.post<SignUpResult>('/auth/signup', command);
-        return response.data;
-    },
-
-    getMe: async () => {
-        const response = await api.get<MeResult>('/auth/me');
-        return response.data;
-    },
-
-    // --- Center Management ---
-
+    // 3. Center Management (Owner)
     registerOrganization: async (command: RegisterOrganizationCommand) => {
-        const response = await api.post<OrganizationDto>('/management/organizations', command);
-        return response.data;
+        const response = await api.post<ApiResponse<OrganizationDto>>('/management/organizations', command);
+        return response.data.data;
     },
-
     getOrganizations: async () => {
-        const response = await api.get<OrganizationDto[]>('/management/organizations');
-        return response.data;
+        // 3.2 Get All Centers (Active)
+        const response = await api.get<ApiResponse<OrganizationDto[]>>('/management/organizations');
+        return response.data.data;
     },
 
-    // --- Invite Code Management ---
-
+    // 4. Invite Code Management (Owner)
     getInviteCode: async (organizationId: number) => {
-        const response = await api.get<InviteCodeResult>(`/organizations/${organizationId}/invite-codes`);
-        return response.data;
+        const response = await api.get<ApiResponse<InviteCodeResult>>(`/organizations/${organizationId}/invite-codes`);
+        return response.data.data;
+    },
+    reissueInviteCode: async (organizationId: number) => {
+        const response = await api.post<ApiResponse<InviteCodeResult>>(`/organizations/${organizationId}/invite-codes/reissue`);
+        return response.data.data;
     },
 
-    reissueInviteCode: async (organizationId: number) => {
-        const response = await api.post<InviteCodeResult>(`/organizations/${organizationId}/invite-codes/reissue`);
-        return response.data;
+    // 5. Instructor Management (HR)
+    getActiveInstructors: async () => {
+        const response = await api.get<ApiResponse<InstructorDto[]>>('/management/instructors');
+        return response.data.data;
+    },
+    getPendingInstructors: async () => {
+        const response = await api.get<ApiResponse<InstructorDto[]>>('/management/pending-instructors');
+        return response.data.data;
+    },
+    // 5.3 Approve/Reject
+    updateMembershipStatus: async (membershipId: number, isApproved: boolean) => {
+        const response = await api.patch<ApiResponse<any>>(`/management/memberships/${membershipId}/status`, null, {
+            params: { isApproved }
+        });
+        return response.data.data;
+    },
+    // 5.4 Update Status
+    updateInstructorStatus: async (membershipId: number, status: string) => {
+        const response = await api.patch<ApiResponse<any>>(`/management/instructors/${membershipId}/management`, { status });
+        return response.data.data;
+    },
+
+    // 6. Super Admin
+    getPendingOrganizations: async () => {
+        const response = await api.get<ApiResponse<OrganizationDto[]>>('/admin/organizations/pending');
+        return response.data.data;
+    },
+    approveOrganization: async (organizationId: number, isApproved: boolean) => {
+        const response = await api.patch<ApiResponse<any>>(`/admin/organizations/${organizationId}/status`, null, {
+            params: { isApproved }
+        });
+        return response.data.data;
     }
 };
 
