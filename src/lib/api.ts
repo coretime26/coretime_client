@@ -53,7 +53,7 @@ export interface SignUpResult {
     status: 'ACTIVE' | 'PENDING_APPROVAL';
 }
 
-export interface ReissueTokenResult {
+export interface ReissueResult {
     accessToken: string;
     refreshToken: string;
 }
@@ -94,73 +94,126 @@ export const clearTokens = () => {
 
 // --- Interceptors ---
 
+// --- Interceptors ---
+
+let isRefreshing = false;
+let failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else if (token) {
+            prom.resolve(token);
+        }
+    });
+
+    failedQueue = [];
+};
+
 // Request: Attach Access Token
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         const token = getAccessToken();
         if (token) {
             if (!config.headers) {
-                config.headers = {} as any; // safe cast for Axios headers
+                config.headers = {} as any;
             }
-            console.log('[API] Attaching Token:', token.substring(0, 10) + '...');
+            // console.log('[API] Attaching Token:', token.substring(0, 10) + '...');
             config.headers.Authorization = `Bearer ${token}`;
-        } else {
-            console.log('[API] No Token found in localStorage');
         }
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// Response: Handle 401 & Refresh
+// Response: Handle 401 & 403 & Refresh
 api.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-        // If 401 and not already retried
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-            const refreshToken = getRefreshToken();
-            const accessToken = getAccessToken();
+        // 1. Handle 403 Forbidden -> Immediate Logout
+        if (error.response?.status === 403) {
+            clearTokens();
+            window.location.href = '/login';
+            return Promise.reject(error);
+        }
 
-            if (refreshToken && accessToken) {
+        // 2. Handle 401 Unauthorized -> Token Refresh
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            if (isRefreshing) {
+                return new Promise(function (resolve, reject) {
+                    failedQueue.push({ resolve, reject });
+                })
+                    .then((token) => {
+                        if (originalRequest.headers) {
+                            originalRequest.headers.Authorization = `Bearer ${token}`;
+                        }
+                        return api(originalRequest);
+                    })
+                    .catch((err) => {
+                        return Promise.reject(err);
+                    });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            const refreshToken = getRefreshToken();
+            const accessToken = getAccessToken(); // Some backends might need old access token
+
+            if (refreshToken) {
                 try {
                     // Call Reissue Endpoint
-                    // Note: Reissue might return nested data too depending on implementation, 
-                    // but typically simple auth endpoints might be direct or wrapped. Assuming wrapped for safety or checking.
-                    // Let's assume standard API wrapper for all 'api/v1' endpoints.
-                    const { data } = await axios.post<ApiResponse<ReissueTokenResult>>(`${BASE_URL}/auth/reissue`, {
-                        accessToken,
+                    const { data } = await axios.post<ApiResponse<ReissueResult>>(`${BASE_URL}/auth/reissue`, {
+                        accessToken: accessToken || '', // Send current (expired) access token if available
                         refreshToken,
                     });
 
-                    // Unwrap if wrapped
+                    // Check success based on ApiResponse wrapper
+                    // Adapting to user's provided structure which might wrap data
                     const newTokens = data.data || data;
-                    // @ts-ignore - handling both wrapped and direct just in case fallback
-                    const finalTokens = newTokens.accessToken ? newTokens : data;
+                    // @ts-ignore
+                    const finalAccessToken = newTokens.accessToken;
+                    // @ts-ignore
+                    const finalRefreshToken = newTokens.refreshToken;
+
+                    if (!finalAccessToken) {
+                        throw new Error('No access token returned');
+                    }
 
                     // Save new tokens
-                    setTokens((finalTokens as any).accessToken, (finalTokens as any).refreshToken);
+                    setTokens(finalAccessToken, finalRefreshToken);
+
+                    // Process Queue
+                    processQueue(null, finalAccessToken);
 
                     // Retry original request
                     if (originalRequest.headers) {
-                        originalRequest.headers.Authorization = `Bearer ${(finalTokens as any).accessToken}`;
+                        originalRequest.headers.Authorization = `Bearer ${finalAccessToken}`;
                     }
                     return api(originalRequest);
                 } catch (refreshError) {
+                    processQueue(refreshError, null);
                     // Refresh failed - Logout
                     clearTokens();
-                    window.location.href = '/login'; // Force redirect
+                    window.location.href = '/login';
                     return Promise.reject(refreshError);
+                } finally {
+                    isRefreshing = false;
                 }
             } else {
                 // No tokens to refresh
                 clearTokens();
-                // Only redirect if not already on login page?
-                // window.location.href = '/login'; 
+                window.location.href = '/login';
+                return Promise.reject(error);
             }
         }
+
         return Promise.reject(error);
     }
 );
@@ -218,8 +271,8 @@ export const authApi = {
     logout: async () => {
         await api.post('/auth/logout');
     },
-    reissue: async (refreshToken: string) => {
-        const response = await api.post<ApiResponse<ReissueTokenResult>>('/auth/reissue', { refreshToken });
+    reissue: async (command: { accessToken: string; refreshToken: string }) => {
+        const response = await api.post<ApiResponse<ReissueResult>>('/auth/reissue', command);
         return response.data.data;
     },
 
