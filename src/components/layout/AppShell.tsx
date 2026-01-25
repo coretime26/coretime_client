@@ -19,7 +19,7 @@ import {
 import { BrandLogo } from '@/components/common/BrandLogo';
 import { useAuth, UserRole } from '@/context/AuthContext';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { authApi, OrganizationResult } from '@/lib/api'; // Added import
 
 // Navigation items based on role
@@ -118,17 +118,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [currentBranch, setCurrentBranch] = useState<string>(''); // Name of current branch
     const [isSwitching, setIsSwitching] = useState(false);
 
-    // Fetch My Organizations on mount
+    // Track if we've already fetched organizations to prevent infinite loops
+    const hasFetchedOrgs = useRef(false);
+
+    // Stabilize the organizationId to prevent unnecessary re-fetches
+    const stableOrgId = useMemo(() => user?.organizationId, [user?.organizationId]);
+
+    // Fetch My Organizations on mount (only once)
     useEffect(() => {
+        // Only fetch if we haven't fetched yet and user is available
+        if (!user || hasFetchedOrgs.current) {
+            return;
+        }
+
         const fetchOrgs = async () => {
             try {
                 const orgs = await authApi.getMyOrganizations();
                 setOrganizations(orgs);
+                hasFetchedOrgs.current = true; // Mark as fetched
+
                 // Set default if exists and not set
                 // Note: Real implementation might persist 'lastSelectedBranchId' in localStorage
                 if (orgs.length > 0) {
                     // If user has an assigned org in context, try to match it
-                    const currentOrg = orgs.find(o => o.id === user?.organizationId);
+                    const currentOrg = orgs.find(o => o.id === stableOrgId);
                     if (currentOrg) {
                         setCurrentBranch(currentOrg.name);
                     } else {
@@ -137,10 +150,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }
             } catch (error) {
                 console.error('Failed to fetch my organizations', error);
+                hasFetchedOrgs.current = false; // Allow retry on error
             }
         };
         fetchOrgs();
-    }, [user?.organizationId]);
+    }, [user, stableOrgId]); // Changed dependency to just user existence and stable org ID
 
     const handleBranchSwitch = (branchName: string) => {
         setIsSwitching(true);
