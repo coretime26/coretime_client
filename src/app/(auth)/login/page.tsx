@@ -6,7 +6,7 @@ import { BrandLogo } from '@/components/common/BrandLogo';
 import { useDisclosure } from '@mantine/hooks';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
-import { authApi, OrganizationResult } from '@/lib/api';
+import { authApi, OrganizationResult, clearSessionCache } from '@/lib/api';
 import { IconBuilding, IconCheck, IconPlus } from '@tabler/icons-react';
 import { signIn } from 'next-auth/react';
 
@@ -56,18 +56,28 @@ function LoginContent() {
 
             if (isPendingState && accessToken) {
                 console.log("LoginPage: Detected Pending State. Injecting Token...");
-                signIn('credentials', {
+
+                // CRITICAL: Wait for signIn to complete before making API calls
+                await signIn('credentials', {
                     accessToken: accessToken,
                     refreshToken: searchParams.get('refreshToken') || '', // Pass refreshToken if available
                     redirect: false,
                     id: 'temp-user',
                     role: 'TEMPUSER'
                 });
+
+                // Give NextAuth time to update the session (small delay to ensure session is ready)
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // CRITICAL: Clear the session cache to force fresh session fetch
+                clearSessionCache();
+
+                console.log("LoginPage: Token injection complete, session cache cleared");
             }
 
             // After auth injection (or if not needed), fetch orgs
             if (isPendingState && orgIds.length > 0) {
-                fetchPendingOrgs(orgIds);
+                await fetchPendingOrgs(orgIds);
             }
         };
 
@@ -76,7 +86,8 @@ function LoginContent() {
                 // Deduplicate IDs
                 const uniqueIds = Array.from(new Set(ids));
 
-                // Use the new batch API
+                console.log("LoginPage: Fetching organizations with authenticated session...");
+                // Use the new batch API - now the session should have the token
                 const results = await authApi.getOrganizations(uniqueIds);
                 setPendingOrgs(results);
                 openPending();

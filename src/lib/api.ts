@@ -110,6 +110,11 @@ const getCachedSession = async () => {
     return session;
 };
 
+// Clear session cache (useful after signIn to force fresh session)
+export const clearSessionCache = () => {
+    sessionCache = null;
+};
+
 // Helper to get token for requests
 const getAccessToken = async () => {
     const session = await getCachedSession();
