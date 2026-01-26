@@ -6,20 +6,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { LoadingOverlay, Text, Center, Stack } from '@mantine/core';
 
-
-const parseJwt = (token: string) => {
+// atob를 대체하는 안정적인 JWT 디코딩 (유니코드 대응)
+const safeDecode = (token: string) => {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-            window.atob(base64)
-                .split('')
-                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                .join('')
-        );
-        return JSON.parse(jsonPayload);
+        return JSON.parse(decodeURIComponent(escape(window.atob(base64))));
     } catch (e) {
-        console.error('JWT Decoding Failed:', e);
+        console.error('JWT Decode Error:', e);
         return null;
     }
 };
@@ -34,55 +28,44 @@ function CallbackContent() {
 
         const accessToken = searchParams.get('accessToken');
         const refreshToken = searchParams.get('refreshToken');
-        const signupToken = searchParams.get('signupToken');
-        const isSignUpRequired = searchParams.get('isSignUpRequired') === 'true';
+        const organizationId = searchParams.get('organizationId');
+
+        // [핵심] 진입하자마자 URL 파라미터부터 즉시 제거
+        if (accessToken) {
+            window.history.replaceState({}, '', window.location.pathname);
+        }
 
         if (accessToken && refreshToken) {
             hasProcessed.current = true;
 
-            // 1. https://www.imdb.com/title/tt10023022/ 즉시 주소창에서 토큰 제거 (뒤로가기 방지 및 보안)
-            window.history.replaceState({}, '', '/');
-
-            // 2. [Safe Decode] 안정적인 JWT 파싱
-            const decodedToken = parseJwt(accessToken);
-            if (!decodedToken) {
-                alert('인증 토큰 형식이 올바르지 않습니다.');
-                router.replace('/login');
+            const decoded = safeDecode(accessToken);
+            if (!decoded) {
+                router.replace('/login?error=InvalidToken');
                 return;
             }
 
-            // 3. [NextAuth Login] 세션 수립
             signIn('credentials', {
                 accessToken,
                 refreshToken,
-                organizationId: searchParams.get('organizationId') || '',
-                accountId: decodedToken.sub || '',
-                email: decodedToken.email || '',
-                name: decodedToken.name || '',
-                role: decodedToken.role || '',
-                redirect: false // 미들웨어에서 리다이렉트를 관리하므로 false 권장
+                organizationId: organizationId || '',
+                accountId: decoded.sub || '',
+                email: decoded.email || '',
+                name: decoded.name || '',
+                role: decoded.role || '',
+                redirect: false // 직접 리다이렉트 제어
             }).then((result) => {
                 if (result?.error) {
-                    console.error('NextAuth Login Error:', result.error);
-                    router.replace('/login?error=auth_failed');
+                    // 크롬에서 "This Message..." 에러가 나면 일로 빠짐
+                    console.error('SignIn Failed:', result.error);
+                    router.replace('/login?error=AuthError');
                 } else {
-                    // 성공 시 대시보드 강제 새로고침(세션 반영) 및 이동
+                    // 성공 시 대시보드(/)로 강제 이동 및 갱신
+                    router.push('/');
                     router.refresh();
-                    router.replace('/');
                 }
+            }).catch(() => {
+                router.replace('/login');
             });
-        }
-        else if (isSignUpRequired && signupToken) {
-            hasProcessed.current = true;
-            const params = new URLSearchParams({
-                signupToken,
-                name: searchParams.get('name') || '',
-                email: searchParams.get('email') || ''
-            });
-            router.replace(`/identity?${params.toString()}`);
-        } else {
-            console.error('Invalid callback params');
-            router.replace('/login');
         }
     }, [searchParams, router]);
 
