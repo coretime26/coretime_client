@@ -82,13 +82,6 @@ export interface MeResult {
 export interface UpdateProfileCommand {
     name?: string;
     phone?: string;
-    email?: string;
-}
-
-export interface ChangePasswordCommand {
-    currentPassword: string;
-    newPassword: string;
-    confirmPassword: string;
 }
 
 export interface NotificationSettings {
@@ -392,12 +385,6 @@ export const profileApi = {
             },
         });
         return response.data.data;
-    },
-
-    // Change password
-    changePassword: async (command: ChangePasswordCommand) => {
-        const response = await api.put<ApiResponse<void>>('/users/me/password', command);
-        return response.data;
     },
 
     // Get notification settings

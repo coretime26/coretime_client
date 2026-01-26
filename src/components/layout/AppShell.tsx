@@ -35,7 +35,7 @@ const getNavItems = (role: UserRole): NavItem[] => {
     const common = [
         { label: '대시보드', icon: IconLayoutDashboard, link: '/' },
         {
-            label: '회원 관리 (CRM)',
+            label: '회원 관리',
             icon: IconUsers,
             link: '/members',
             children: [
@@ -81,9 +81,13 @@ const getNavItems = (role: UserRole): NavItem[] => {
                 ]
             },
             {
-                label: '관리자 설정',
+                label: '설정',
                 icon: IconSettings,
                 link: '/settings',
+                children: [
+                    { label: '관리자 설정', link: '/settings' },
+                    { label: '프로필 설정', link: '/settings/profile' },
+                ]
             },
         ];
     } else {
@@ -100,9 +104,13 @@ const getNavItems = (role: UserRole): NavItem[] => {
                 ]
             },
             {
-                label: '관리자 설정',
+                label: '설정',
                 icon: IconSettings,
                 link: '/settings',
+                children: [
+                    { label: '관리자 설정', link: '/settings' },
+                    { label: '프로필 설정', link: '/settings/profile' },
+                ]
             },
         ];
     }
@@ -322,7 +330,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 </Menu.Target>
                                 <Menu.Dropdown>
                                     <Menu.Label>계정 설정</Menu.Label>
-                                    <Menu.Item leftSection={<IconSettings size={14} />}>내 프로필 설정</Menu.Item>
+                                    <Menu.Item
+                                        leftSection={<IconSettings size={14} />}
+                                        onClick={() => router.push('/settings/profile')}
+                                    >
+                                        내 프로필 설정
+                                    </Menu.Item>
                                     <Menu.Divider />
                                     <Menu.Item
                                         color="red"

@@ -18,6 +18,7 @@ interface User {
     organizationId?: number | null;
     status?: 'ACTIVE' | 'PENDING' | 'REJECTED';
     signupToken?: string;
+    profileImageUrl?: string | null;
 }
 
 interface AuthContextType {
@@ -71,6 +72,7 @@ function AuthContent({ children }: { children: ReactNode }) {
                 role: normalizeRole(profile.identity), // Normalize role from API
                 organizationId: profile.organizationId,
                 status: 'ACTIVE',
+                profileImageUrl: profile.profileImageUrl,
             }));
             loadedSessionId.current = sessionId;
         } catch (error) {
