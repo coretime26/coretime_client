@@ -510,7 +510,7 @@ export const paymentApi = {
     },
 
     // Refund payment
-    refund: async (paymentId: number) => {
+    refund: async (paymentId: String) => {
         const response = await api.post<ApiResponse<RefundResult>>(`/finance/payments/${paymentId}/refund`);
         return response.data;
     },
