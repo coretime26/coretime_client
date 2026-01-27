@@ -73,7 +73,7 @@ export interface ReissueResult {
 }
 
 export interface MeResult {
-    accountId: string | number;
+    accountId: string;
     name: string;
     identity: 'OWNER' | 'INSTRUCTOR' | 'MEMBER' | 'SYSTEM_ADMIN';
     organizationId: number | null;
@@ -129,8 +129,8 @@ export type PaymentMethod = 'CARD' | 'TRANSFER' | 'CASH';
 export type PaymentStatus = 'PAID' | 'REFUNDED' | 'CANCELLED';
 
 export interface Payment {
-    id: String;
-    membershipId: String;
+    id: string;
+    membershipId: string;
     memberName: string;
     productName: string;
     amount: number;
@@ -141,11 +141,11 @@ export interface Payment {
 }
 
 export interface CreatePaymentCommand {
-    membershipId: String;
-    productId: String;
+    membershipId: string;
+    productId: string;
     amount: number;
     method: PaymentMethod;
-    linkedTicketId?: number | null;
+    linkedTicketId?: string | null;
 }
 
 export interface RefundResult {
