@@ -14,6 +14,7 @@ export interface Member {
     lastAttendanceAt?: Date;
     pinnedNote?: string; // High priority note
     profileImageUrl?: string | null;
+    tickets: { id: TSID; name: string; remainingCount: number }[]; // Active tickets snapshot
 }
 
 export interface Ticket {

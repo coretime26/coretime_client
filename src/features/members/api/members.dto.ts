@@ -12,6 +12,13 @@ export interface MemberDto {
     lastAttendanceAt?: string; // ISO Date
     pinnedNote?: string;
     profileImageUrl?: string | null;
+    tickets: MemberTicketInfo[]; // [NEW] Active tickets
+}
+
+export interface MemberTicketInfo {
+    id: number | string;
+    name: string;
+    remainingCount: number;
 }
 
 export interface RegisterMemberCommand {

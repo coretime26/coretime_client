@@ -33,7 +33,7 @@ export default function MemberListPage() {
     });
 
     // Mock tickets needed temporarily for display compatibility
-    const { data: tickets = [] } = useMemberTickets();
+    // const { data: tickets = [] } = useMemberTickets(); // [REMOVED] Now using member.tickets from API
 
     // UI States
     const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -125,7 +125,7 @@ export default function MemberListPage() {
                         <Table.Tbody>
                             {members.length > 0 ? members.map((member: Member) => {
                                 // Find active ticket (simplified: mock compatibility)
-                                const memberTicket = tickets.find((t: MemberTicketResult) => t.memberId === String(member.id) && t.status === 'ACTIVE');
+                                // [REMOVED] Ticket info is now in member.tickets
 
                                 return (
                                     <Table.Tr key={member.id} style={{ cursor: 'pointer' }} onClick={() => handleRowClick(member)}>
@@ -152,11 +152,22 @@ export default function MemberListPage() {
                                         </Table.Td>
                                         <Table.Td>{member.phone}</Table.Td>
                                         <Table.Td>
-                                            {memberTicket ? (
-                                                <Text size="sm">{memberTicket.ticketName} ({memberTicket.remainingCount}회)</Text>
-                                            ) : (
-                                                <Text size="sm" c="dimmed">-</Text>
-                                            )}
+                                            <Group gap={4}>
+                                                {member.tickets && member.tickets.length > 0 ? (
+                                                    <>
+                                                        <Text size="sm" c="dark.3">
+                                                            {member.tickets[0].name} <Text span c="indigo" fw={600}>({member.tickets[0].remainingCount}회)</Text>
+                                                        </Text>
+                                                        {member.tickets.length > 1 && (
+                                                            <Badge size="sm" variant="light" color="gray" px={6}>
+                                                                +{member.tickets.length - 1}
+                                                            </Badge>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <Text size="sm" c="dimmed">-</Text>
+                                                )}
+                                            </Group>
                                         </Table.Td>
                                         <Table.Td>
                                             {member.lastAttendanceAt ? dayjs(member.lastAttendanceAt).format('YY.MM.DD') : '-'}

@@ -9,6 +9,10 @@ export const getMockMembers = (): Member[] => Array.from({ length: 50 }).map((_,
     registeredAt: new Date(2025, 0, 1),
     lastAttendanceAt: i % 3 === 0 ? new Date(2026, 0, 18) : undefined,
     pinnedNote: i === 0 ? 'Herniated Disc L4-L5' : undefined,
+    tickets: i < 3 ? [
+        { id: `T_${i}_1`, name: '1:1 PT 30 Sessions', remainingCount: 15 },
+        i === 0 ? { id: `T_${i}_2`, name: 'Group Pilates', remainingCount: 5 } : null
+    ].filter(Boolean) as any[] : [],
 }));
 
 export const getMockTickets = (): Ticket[] => {

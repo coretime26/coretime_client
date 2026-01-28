@@ -23,6 +23,11 @@ function mapDtoToMember(dto: MemberDto): Member {
         lastAttendanceAt: dto.lastAttendanceAt ? new Date(dto.lastAttendanceAt) : undefined,
         pinnedNote: dto.pinnedNote,
         profileImageUrl: dto.profileImageUrl,
+        tickets: (dto.tickets || []).map(t => ({
+            id: String(t.id),
+            name: t.name,
+            remainingCount: t.remainingCount
+        })),
     };
 }
 
