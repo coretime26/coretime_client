@@ -2,24 +2,19 @@ import "./globals.css";
 import '@mantine/core/styles.css';
 import '@mantine/dates/styles.css';
 import '@mantine/notifications/styles.css';
+import '@mantine/charts/styles.css';
 
-import { ColorSchemeScript, MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
-import { ModalsProvider } from '@mantine/modals';
+import { ColorSchemeScript } from '@mantine/core';
 import { theme } from '../theme';
-import { AuthProvider } from '@/context/AuthContext';
+import { Providers } from './_providers/providers';
 import { SettingsProvider } from '@/context/SettingsContext';
-import { MemberProvider } from '@/context/MemberContext';
+
 import { FinanceProvider } from '@/context/FinanceContext';
 
 export const metadata = {
   title: 'CoreTime - Pilates Studio Management',
   description: 'Smart studio management for owners and instructors',
 };
-
-import { QueryProvider } from '@/components/providers/QueryProvider';
-
-// ... imports ...
 
 export default function RootLayout({
   children,
@@ -33,22 +28,13 @@ export default function RootLayout({
         <link rel="stylesheet" as="style" crossOrigin="anonymous" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
       </head>
       <body>
-        <MantineProvider theme={theme}>
-          <Notifications />
-          <ModalsProvider>
-            <QueryProvider>
-              <AuthProvider>
-                <SettingsProvider>
-                  <FinanceProvider>
-                    <MemberProvider>
-                      {children}
-                    </MemberProvider>
-                  </FinanceProvider>
-                </SettingsProvider>
-              </AuthProvider>
-            </QueryProvider>
-          </ModalsProvider>
-        </MantineProvider>
+        <Providers>
+          <SettingsProvider>
+            <FinanceProvider>
+              {children}
+            </FinanceProvider>
+          </SettingsProvider>
+        </Providers>
       </body>
     </html>
   );

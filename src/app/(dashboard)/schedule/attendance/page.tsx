@@ -14,7 +14,8 @@ import {
 import { useState } from 'react';
 import dayjs from 'dayjs';
 import { useSettings } from '@/context/SettingsContext';
-import { CLASSES, RESERVATIONS, Reservation } from '@/lib/mock-data';
+import { CLASSES, RESERVATIONS } from '@/features/schedule/model/mock-data';
+import { Reservation } from '@/features/schedule';
 
 export default function AttendancePage() {
     // Correctly destructure policies and the update function from context

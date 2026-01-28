@@ -17,7 +17,7 @@ import {
 } from '@/lib/api';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 import { LoadingOverlay, Button } from '@mantine/core';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';

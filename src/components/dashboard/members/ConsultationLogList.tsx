@@ -1,6 +1,6 @@
 import { Stack, Button, Text, Group, Card, Textarea, Avatar, Badge, Select } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { ConsultationLog, useMembers } from '@/context/MemberContext';
+import { ConsultationLog, useConsultationLogs, useCreateConsultationLog, ConsultationCategory } from '@/features/members';
 import { IconPlus, IconMessageCircle } from '@tabler/icons-react';
 import { useState } from 'react';
 import dayjs from 'dayjs';
@@ -9,17 +9,27 @@ interface ConsultationLogListProps {
     memberId: string;
 }
 
+const CATEGORY_DATA = [
+    { value: 'GENERAL', label: '일반' },
+    { value: 'RE_REGISTRATION', label: '재등록' },
+    { value: 'COMPLAINT', label: '컴플레인' },
+    { value: 'PHYSICAL', label: '건강' },
+    { value: 'OTHER', label: '기타' }
+];
+
 export default function ConsultationLogList({ memberId }: ConsultationLogListProps) {
-    const { logs, addLog } = useMembers(); // In real app, might want to fetch logs for this user
+    const { data: logs = [] } = useConsultationLogs(memberId);
+    const { mutate: addLog } = useCreateConsultationLog();
     const [isAdding, setIsAdding] = useState(false);
 
-    // Filter logs for this member
-    const memberLogs = logs.filter(l => l.memberId === memberId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Filter logs for this member (redundant if hook filters, but safe)
+    const memberLogs = logs.filter((l: ConsultationLog) => l.membershipId.toString() === memberId)
+        .sort((a, b) => new Date(b.consultedAt).getTime() - new Date(a.consultedAt).getTime());
 
     const form = useForm({
         initialValues: {
             content: '',
-            type: 'GENERAL', // Just a simplified tag usage for now
+            category: 'GENERAL' as ConsultationCategory,
         },
         validate: {
             content: (value) => (value.trim().length > 0 ? null : '내용을 입력해주세요.'),
@@ -28,15 +38,17 @@ export default function ConsultationLogList({ memberId }: ConsultationLogListPro
 
     const handleSubmit = (values: typeof form.values) => {
         addLog({
-            memberId,
-            instructorId: 'INS_CURRENT', // Mock current user
-            instructorName: 'Current Instructor', // Mock current user name
+            membershipId: memberId,
+            category: values.category,
             content: values.content,
-            tags: [values.type === 'GENERAL' ? '#상담' : '#운동'], // Simple tagging
+            tags: [], // Simple list doesn't support tags yet
+            consultedAt: new Date()
         });
         setIsAdding(false);
         form.reset();
     };
+
+    const getCategoryLabel = (cat: string) => CATEGORY_DATA.find(c => c.value === cat)?.label || cat;
 
     return (
         <Stack gap="md">
@@ -53,10 +65,11 @@ export default function ConsultationLogList({ memberId }: ConsultationLogListPro
                         <Select
                             size="xs"
                             mb="xs"
-                            data={['GENERAL', 'EXERCISE']}
+                            data={CATEGORY_DATA}
                             defaultValue="GENERAL"
                             style={{ maxWidth: 120 }}
-                            {...form.getInputProps('type')}
+                            allowDeselect={false}
+                            {...form.getInputProps('category')}
                         />
                         <Textarea
                             placeholder="상담 내용을 입력하세요..."
@@ -73,21 +86,26 @@ export default function ConsultationLogList({ memberId }: ConsultationLogListPro
             )}
 
             {memberLogs.length > 0 ? (
-                memberLogs.map(log => (
-                    <Card key={log.id} withBorder radius="md" p="md">
+                memberLogs.map((log) => (
+                    <Card key={String(log.id)} withBorder radius="md" p="md">
                         <Group justify="space-between" align="start" mb={4}>
                             <Group gap="xs">
-                                <Avatar size="sm" radius="xl" color="blue" name={log.instructorName} />
-                                <Text size="sm" fw={600}>{log.instructorName}</Text>
-                                {log.tags.map(tag => (
-                                    <Badge key={tag} size="xs" variant="dot" color="gray">{tag}</Badge>
-                                ))}
+                                <Avatar size="sm" radius="xl" color="blue" />
+                                <Text size="sm" fw={600}>관리자({log.operatorAccountId})</Text>
+                                <Badge size="xs" variant="light">{getCategoryLabel(log.category)}</Badge>
                             </Group>
                             <Text size="xs" c="dimmed">
-                                {dayjs(log.date).format('YYYY-MM-DD HH:mm')}
+                                {dayjs(log.consultedAt).format('YYYY-MM-DD HH:mm')}
                             </Text>
                         </Group>
                         <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>{log.content}</Text>
+                        {log.tags && log.tags.length > 0 && (
+                            <Group gap={4} mt="xs">
+                                {log.tags.map((tag) => (
+                                    <Badge key={tag} size="xs" variant="dot" color="gray">{tag}</Badge>
+                                ))}
+                            </Group>
+                        )}
                     </Card>
                 ))
             ) : (

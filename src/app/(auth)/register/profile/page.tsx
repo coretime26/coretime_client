@@ -3,7 +3,7 @@
 import { Container, Title, Text, Stack, Button, TextInput, Group } from '@mantine/core';
 import { IconArrowLeft } from '@tabler/icons-react';
 import { useState, Suspense, useEffect } from 'react';
-import { useAuth, UserRole } from '@/context/AuthContext';
+import { useAuth, UserRole } from '@/features/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
 
 function ProfileContent() {

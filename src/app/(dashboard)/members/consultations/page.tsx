@@ -2,93 +2,87 @@
 
 import {
     Title, Text, Container, Timeline, Card, Avatar,
-    Group, TextInput, Badge, Paper, Button, Box, Modal, Select, Textarea, MultiSelect
+    Group, Badge, Paper, Button, Box, Modal, Select, Textarea, TagsInput, LoadingOverlay, Center
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
-import { IconSearch, IconMessageCircle, IconTag, IconPlus, IconCheck } from '@tabler/icons-react';
-import { useMembers } from '@/context/MemberContext';
+import { IconMessageCircle, IconPlus, IconCheck } from '@tabler/icons-react';
+import { useMembers, useConsultationLogs, useCreateConsultationLog, ConsultationCategory } from '@/features/members';
 import { useDisclosure } from '@mantine/hooks';
-import { notifications } from '@mantine/notifications';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 
-export default function ConsultationLogsPage() {
-    const { members } = useMembers();
+const CATEGORY_DATA = [
+    { value: 'GENERAL', label: '일반 상담' },
+    { value: 'RE_REGISTRATION', label: '재등록' },
+    { value: 'COMPLAINT', label: '컴플레인' },
+    { value: 'PHYSICAL', label: '체형/건강' },
+    { value: 'OTHER', label: '기타' }
+];
 
-    // Modal State
+const TAG_DATA = ['#신규상담', '#재등록', '#통증케어', '#다이어트', '#불만사항', '#결석', '#운동목적', '#스케줄'];
+
+export default function ConsultationLogsPage() {
+    // 1. Members Data
+    const { data: members = [] } = useMembers();
+    const memberOptions = useMemo(() =>
+        members.map(m => ({ value: m.id.toString(), label: `${m.name} (${m.phone})` })),
+        [members]);
+
+    // 2. State
+    const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
     const [opened, { open, close }] = useDisclosure(false);
 
-    // Form State
+    // 3. API Hooks
+    const { data: logs = [], isLoading, isRefetching } = useConsultationLogs(selectedMemberId || undefined);
+    const createLogMutation = useCreateConsultationLog();
+
+    // 4. Form State
     const [formData, setFormData] = useState({
         memberId: '',
         date: new Date(),
-        instructorName: '김필라 강사', // Default hardcoded for now
+        // instructorName removed from form, backend handles operator
+        category: 'GENERAL' as ConsultationCategory,
         tags: [] as string[],
         content: ''
     });
 
-    // Mock logs state (initialized with some data)
-    const [logs, setLogs] = useState([
-        {
-            id: 'LOG_1', memberId: 'MEM_1', date: new Date(),
-            instructorName: '김필라 강사', content: '허리 통증이 조금 완화되셨다고 함. 오늘 스트레칭 위주 진행.',
-            tags: ['#통증케어', '#허리']
-        },
-        {
-            id: 'LOG_2', memberId: 'MEM_2', date: dayjs().subtract(1, 'day').toDate(),
-            instructorName: '이수민 강사', content: '재등록 상담 진행. 30회권 관심 있으심.',
-            tags: ['#재등록', '#상담']
-        },
-        {
-            id: 'LOG_3', memberId: 'MEM_3', date: dayjs().subtract(2, 'day').toDate(),
-            instructorName: '김필라 강사', content: '처음 오심. 운동 목적은 다이어트.',
-            tags: ['#신규', '#다이어트']
-        },
-    ]);
-
-    const [search, setSearch] = useState('');
-
-    const getMemberName = (id: string) => members.find(m => m.id === id)?.name || 'Unknown';
-
-    // Filter Logic
-    const filteredLogs = logs.filter(log => {
-        const memberName = getMemberName(log.memberId);
-        return memberName.includes(search); // Filter by member name
-    });
+    // Helper: Reset form when opening modal
+    const handleOpenModal = () => {
+        setFormData({
+            memberId: selectedMemberId || '',
+            date: new Date(),
+            category: 'GENERAL',
+            tags: [],
+            content: ''
+        });
+        open();
+    };
 
     const handleAddLog = () => {
-        if (!formData.memberId) {
-            notifications.show({ title: '오류', message: '회원을 선택해주세요.', color: 'red' });
-            return;
-        }
+        if (!formData.memberId) return;
 
-        const newLog = {
-            id: `LOG_${Date.now()}`,
-            memberId: formData.memberId,
-            date: formData.date,
-            instructorName: formData.instructorName,
+        createLogMutation.mutate({
+            membershipId: formData.memberId,
+            category: formData.category,
             content: formData.content,
-            tags: formData.tags
-        };
-
-        setLogs([newLog, ...logs]);
-
-        notifications.show({
-            title: '상담 기록 등록',
-            message: '새로운 상담 기록이 추가되었습니다.',
-            color: 'green',
-            icon: <IconCheck size={18} />
-        });
-
-        close();
-        // Reset form (optional, keeping instructor name)
-        setFormData({
-            ...formData,
-            memberId: '',
-            content: '',
-            tags: []
+            tags: formData.tags,
+            consultedAt: formData.date
+        }, {
+            onSuccess: () => {
+                close();
+                // If the user added a log for a different member than currently viewed, switch view?
+                // For now, keep current view or switch if same.
+                if (selectedMemberId !== formData.memberId) {
+                    setSelectedMemberId(formData.memberId);
+                }
+            }
         });
     };
+
+    const getMemberName = (id: string) => members.find(m => m.id.toString() === id)?.name || '알 수 없음';
+
+    // Category Label Helper
+    const getCategoryLabel = (cat: string) => CATEGORY_DATA.find(c => c.value === cat)?.label || cat;
 
     return (
         <Container size="md" py="xl">
@@ -97,79 +91,105 @@ export default function ConsultationLogsPage() {
                     <Title order={2}>상담/메모 기록</Title>
                     <Text c="dimmed">회원 상담 이력을 타임라인으로 확인합니다.</Text>
                 </Box>
-                <Button leftSection={<IconPlus size={18} />} onClick={open}>새 상담 기록</Button>
+                <Button leftSection={<IconPlus size={18} />} onClick={handleOpenModal}>새 상담 기록</Button>
             </Group>
 
-            {/* Search */}
+            {/* Member Selection Filter */}
             <Paper p="md" mb="xl" withBorder radius="md">
-                <TextInput
-                    placeholder="회원 이름 검색..."
-                    leftSection={<IconSearch size={16} />}
-                    value={search}
-                    onChange={(e) => setSearch(e.currentTarget.value)}
+                <Select
+                    label="회원 선택"
+                    placeholder="상담 이력을 조회할 회원을 선택하세요"
+                    data={memberOptions}
+                    searchable
+                    value={selectedMemberId}
+                    onChange={setSelectedMemberId}
+                    leftSection={<IconMessageCircle size={16} />}
+                    clearable
                 />
             </Paper>
 
-            {/* Timeline */}
-            <Timeline active={filteredLogs.length} bulletSize={24} lineWidth={2}>
-                {filteredLogs.map((log) => (
-                    <Timeline.Item
-                        key={log.id}
-                        bullet={<Avatar size={24} radius="xl" color="indigo" />}
-                        title={
-                            <Group gap="xs">
-                                <Text fw={600} size="sm">{getMemberName(log.memberId)} 회원님</Text>
-                                <Text size="xs" c="dimmed">• {log.instructorName}</Text>
-                            </Group>
-                        }
-                    >
-                        <Text c="dimmed" size="xs" mt={4}>
-                            {dayjs(log.date).format('YYYY-MM-DD HH:mm')}
-                        </Text>
-                        <Card withBorder radius="md" mt="sm" p="sm" bg="gray.0">
-                            <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{log.content}</Text>
-                            <Group gap={4} mt="sm">
-                                {log.tags.map(tag => (
-                                    <Badge key={tag} size="sm" variant="dot" color="blue">{tag}</Badge>
-                                ))}
-                            </Group>
-                        </Card>
-                    </Timeline.Item>
-                ))}
-            </Timeline>
+            {/* Timeline Content */}
+            <Box pos="relative" mih={200}>
+                <LoadingOverlay visible={isLoading || isRefetching} zIndex={1000} overlayProps={{ radius: "sm", blur: 2 }} />
+
+                {!selectedMemberId ? (
+                    <Center h={200} bg="gray.0" style={{ borderRadius: 8 }}>
+                        <Text c="dimmed">회원을 선택하면 상담 이력이 표시됩니다.</Text>
+                    </Center>
+                ) : logs.length === 0 ? (
+                    <Center h={200} bg="gray.0" style={{ borderRadius: 8 }}>
+                        <Text c="dimmed">등록된 상담 기록이 없습니다.</Text>
+                    </Center>
+                ) : (
+                    <Timeline active={logs.length} bulletSize={24} lineWidth={2}>
+                        {logs.map((log) => (
+                            <Timeline.Item
+                                key={log.id}
+                                bullet={<Avatar size={24} radius="xl" color="indigo" />}
+                                title={
+                                    <Group gap="xs">
+                                        <Text fw={600} size="sm">{getMemberName(log.membershipId)} 회원님</Text>
+                                        <Badge size="sm" variant="light" color="gray">{getCategoryLabel(log.category)}</Badge>
+                                    </Group>
+                                }
+                            >
+                                <Text c="dimmed" size="xs" mt={4}>
+                                    {dayjs(log.consultedAt).format('YYYY-MM-DD HH:mm')}
+                                </Text>
+                                <Card withBorder radius="md" mt="sm" p="sm" bg="gray.0">
+                                    <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{log.content}</Text>
+                                    <Group gap={4} mt="sm">
+                                        {log.tags.map(tag => (
+                                            <Badge key={tag} size="sm" variant="dot" color="blue">{tag}</Badge>
+                                        ))}
+                                    </Group>
+                                </Card>
+                            </Timeline.Item>
+                        ))}
+                    </Timeline>
+                )}
+            </Box>
 
             {/* New Log Modal */}
             <Modal opened={opened} onClose={close} title="새 상담 기록 작성" size="lg">
+                <LoadingOverlay visible={createLogMutation.isPending} />
+
                 <Select
                     label="회원 선택"
                     placeholder="회원을 검색하세요"
-                    data={members.map(m => ({ value: m.id, label: `${m.name} (${m.phone})` }))}
+                    data={memberOptions}
                     searchable
                     mb="sm"
                     value={formData.memberId}
                     onChange={(v) => setFormData({ ...formData, memberId: v || '' })}
+                    error={!formData.memberId && '회원을 선택해주세요'}
                 />
+
                 <Group grow mb="sm">
                     <DatePickerInput
                         label="상담 일시"
                         value={formData.date}
                         onChange={(v) => setFormData({ ...formData, date: (v as any) || new Date() })}
+                        maxDate={new Date()}
                     />
-                    <TextInput
-                        label="작성자"
-                        value={formData.instructorName}
-                        onChange={(e) => setFormData({ ...formData, instructorName: e.currentTarget.value })}
+                    <Select
+                        label="상담 카테고리"
+                        data={CATEGORY_DATA}
+                        value={formData.category}
+                        onChange={(v) => setFormData({ ...formData, category: (v as ConsultationCategory) || 'GENERAL' })}
+                        allowDeselect={false}
                     />
                 </Group>
 
-                <MultiSelect
+                <TagsInput
                     label="태그"
-                    placeholder="태그를 입력하거나 선택하세요"
-                    data={['#신규상담', '#재등록', '#통증케어', '#다이어트', '#불만사항', '#결석']}
-                    searchable
+                    description="태그를 입력하고 Enter를 누르세요"
+                    placeholder="태그 입력"
+                    data={TAG_DATA}
                     mb="sm"
                     value={formData.tags}
                     onChange={(v) => setFormData({ ...formData, tags: v })}
+                    clearable
                 />
 
                 <Textarea
@@ -183,7 +203,7 @@ export default function ConsultationLogsPage() {
 
                 <Group justify="flex-end">
                     <Button variant="default" onClick={close}>취소</Button>
-                    <Button onClick={handleAddLog}>저장하기</Button>
+                    <Button onClick={handleAddLog} disabled={!formData.memberId || !formData.content}>저장하기</Button>
                 </Group>
             </Modal>
         </Container>

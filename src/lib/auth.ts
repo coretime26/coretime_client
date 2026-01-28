@@ -2,7 +2,7 @@ import { NextAuthOptions, User } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import KakaoProvider from "next-auth/providers/kakao";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { authApi } from "./api";
+import { authApi } from "@/features/auth/api/auth.api";
 
 /**
  * 유니코드를 지원하는 안정적인 JWT 디코딩 함수

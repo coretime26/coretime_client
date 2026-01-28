@@ -1,7 +1,7 @@
 'use client';
 
 import { Table, Badge, Button, Group, Text, ActionIcon, Menu } from '@mantine/core';
-import { Reservation } from '@/lib/mock-data';
+import { Reservation } from '@/features/schedule';
 import { IconDotsVertical, IconCheck, IconX, IconUser } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 

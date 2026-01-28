@@ -3,7 +3,7 @@
 import { Box, Stack, Text, Checkbox, Avatar, Divider, ActionIcon, Group } from '@mantine/core';
 import { DatePicker } from '@mantine/dates';
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react';
-import { getInstructorsWithColors, getRooms } from '@/lib/mock-data';
+import { getInstructorsWithColors, getRooms } from '../model/mock-data';
 import dayjs from 'dayjs';
 
 import { useSettings } from '@/context/SettingsContext';

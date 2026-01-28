@@ -133,7 +133,11 @@ export interface Payment {
     membershipId: string; // FIXED: String -> string
     memberName: string;
     productName: string;
-    amount: number;
+    amount: number;       // Paid amount
+    totalAmount?: number;
+    discountAmount?: number;
+    unpaidAmount?: number;
+    unpaidDueDate?: string;
     method: PaymentMethod;
     status: PaymentStatus;
     paidAt: string;
@@ -180,22 +184,85 @@ export interface AddTicketCountCommand {
 }
 
 export interface CreatePaymentCommand {
-    membershipId: string;    // FIXED: String -> string
-    productId: string;       // FIXED: String -> string
+    membershipId: string;
+    productId: string;
     amount: number;
+    totalAmount: number;
+    discountAmount?: number;
+    unpaidAmount?: number;
+    unpaidDueDate?: string;
     method: PaymentMethod;
     linkedTicketId?: string | null;
     autoIssue?: boolean;
 }
 
+export interface PaymentQuery {
+    startDate?: string;
+    endDate?: string;
+    hasUnpaid?: boolean;
+    search?: string;
+}
+
 export interface RefundResult {
     status: PaymentStatus;
 }
+
+// Finance Statistics Types
+export interface RevenueSummary {
+    totalSales: number;
+    refundAmount: number;
+    netSales: number;
+    unpaidAmount: number;
+    growthRate: number;
+    topPaymentMethod: {
+        method: PaymentMethod;
+        percentage: number;
+        amount: number;
+    };
+}
+
+export interface TrendData {
+    date: string; // YYYY-MM-DD
+    revenue: number;
+    refund: number;
+    unpaid: number;
+}
+
+export interface PaymentMethodStats {
+    method: PaymentMethod;
+    label: string;
+    amount: number;
+    percentage: number;
+    color: string;
+}
+
+export interface Pagination {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}
+
+export interface TransactionItem {
+    id: string; // TSID or Long (Stringified)
+    paidAt: string;
+    productName: string;
+    memberName: string;
+    method: PaymentMethod;
+    amount: number;
+    status: PaymentStatus;
+}
+
+export interface TransactionList {
+    list: TransactionItem[];
+    pagination: Pagination;
+}
+
 // --- API Client ---
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL + "/api/v1" || 'http://localhost:8080/api/v1';
 
-const api = axios.create({
+export const api = axios.create({
     baseURL: BASE_URL,
     transformResponse: [
         (data) => {
@@ -369,9 +436,23 @@ export interface InstructorDto {
     name: string;
     email: string;
     phone: string;
-    status: 'ACTIVE' | 'PENDING_APPROVAL' | 'INACTIVE' | 'WITHDRAWN';
+    identity: 'INSTRUCTOR';
+    status: 'ACTIVE' | 'PENDING_APPROVAL' | 'INACTIVE' | 'WITHDRAWN' | 'REJECTED';
     profileImageUrl?: string | null;
-    joinedAt?: string;
+    gender: 'MALE' | 'FEMALE';
+    birthDate?: string;
+    memo?: string;
+    approvedAt?: string;
+    createdAt?: string;
+}
+
+export interface RegisterInstructorCommand {
+    name: string;
+    phone: string;
+    email?: string;
+    gender: 'MALE' | 'FEMALE';
+    birthDate?: string;
+    memo?: string;
 }
 
 // --- API Functions ---
@@ -448,6 +529,10 @@ export const authApi = {
     },
 
     // 5. Instructor Management (HR)
+    registerInstructor: async (command: RegisterInstructorCommand) => {
+        const response = await api.post<ApiResponse<InstructorDto>>('/management/instructors/register', command);
+        return response.data.data;
+    },
     getActiveInstructors: async () => {
         const response = await api.get<ApiResponse<InstructorDto[]>>('/management/instructors');
         return response.data.data;
@@ -562,9 +647,9 @@ export const paymentApi = {
         return response.data.data;
     },
 
-    // Get all payments
-    getAll: async () => {
-        const response = await api.get<ApiResponse<Payment[]>>('/finance/payments');
+    // Get all payments with optional filtering
+    getAll: async (params?: PaymentQuery) => {
+        const response = await api.get<ApiResponse<Payment[]>>('/finance/payments', { params });
         return response.data.data;
     },
 
@@ -622,6 +707,27 @@ export const memberTicketApi = {
         return response.data;
     },
 };
+
+// Finance Statistics API
+export const financeApi = {
+    getSummary: async (params: { startDate: string; endDate: string }) => {
+        const response = await api.get<ApiResponse<RevenueSummary>>('/finance/stats/summary', { params });
+        return response.data.data;
+    },
+    getTrend: async (params: { startDate: string; endDate: string }) => {
+        const response = await api.get<ApiResponse<TrendData[]>>('/finance/stats/trend', { params });
+        return response.data.data;
+    },
+    getPaymentMethods: async (params: { startDate: string; endDate: string }) => {
+        const response = await api.get<ApiResponse<PaymentMethodStats[]>>('/finance/stats/payment-methods', { params });
+        return response.data.data;
+    },
+    getTransactions: async (params: { startDate: string; endDate: string; page?: number; limit?: number; search?: string }) => {
+        const response = await api.get<ApiResponse<TransactionList>>('/finance/stats/transactions', { params });
+        return response.data.data;
+    }
+};
+
 
 export default api;
 
@@ -754,10 +860,10 @@ export const financeKeys = {
     products: ['products'] as const,
 };
 
-export function usePayments(options?: Omit<UseQueryOptions<Payment[], Error>, 'queryKey' | 'queryFn'>) {
+export function usePayments(query?: PaymentQuery, options?: Omit<UseQueryOptions<Payment[], Error>, 'queryKey' | 'queryFn'>) {
     return useQuery({
-        queryKey: financeKeys.payments,
-        queryFn: paymentApi.getAll,
+        queryKey: query ? [...financeKeys.payments, query] : financeKeys.payments,
+        queryFn: () => paymentApi.getAll(query),
         staleTime: 1 * 60 * 1000,
         ...options
     });
@@ -769,9 +875,51 @@ export function useAvailablePayments(membershipId: string, options?: Omit<UseQue
         queryFn: () => paymentApi.getAvailable(membershipId),
         enabled: !!membershipId, // Only fetch if membershipId is present
         staleTime: 0, // Always fresh for this critical UI
-        ...options
+        ...options,
     });
 }
+
+// Stats Hooks
+export function useFinanceStatsSummary(params: { startDate: string; endDate: string }, options?: Omit<UseQueryOptions<RevenueSummary, Error>, 'queryKey' | 'queryFn'>) {
+    return useQuery({
+        queryKey: ['finance', 'stats', 'summary', params],
+        queryFn: () => financeApi.getSummary(params),
+        enabled: !!params.startDate && !!params.endDate,
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+}
+
+export function useFinanceStatsTrend(params: { startDate: string; endDate: string }, options?: Omit<UseQueryOptions<TrendData[], Error>, 'queryKey' | 'queryFn'>) {
+    return useQuery({
+        queryKey: ['finance', 'stats', 'trend', params],
+        queryFn: () => financeApi.getTrend(params),
+        enabled: !!params.startDate && !!params.endDate,
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+}
+
+export function useFinanceStatsPaymentMethods(params: { startDate: string; endDate: string }, options?: Omit<UseQueryOptions<PaymentMethodStats[], Error>, 'queryKey' | 'queryFn'>) {
+    return useQuery({
+        queryKey: ['finance', 'stats', 'payment-methods', params],
+        queryFn: () => financeApi.getPaymentMethods(params),
+        enabled: !!params.startDate && !!params.endDate,
+        staleTime: 5 * 60 * 1000,
+        ...options,
+    });
+}
+
+export function useFinanceStatsTransactions(params: { startDate: string; endDate: string; page?: number; limit?: number; search?: string }, options?: Omit<UseQueryOptions<TransactionList, Error>, 'queryKey' | 'queryFn'>) {
+    return useQuery({
+        queryKey: ['finance', 'stats', 'transactions', params],
+        queryFn: () => financeApi.getTransactions(params),
+        enabled: !!params.startDate && !!params.endDate,
+        staleTime: 1 * 60 * 1000,
+        ...options,
+    });
+}
+
 
 // --- Member Hooks ---
 
@@ -812,7 +960,8 @@ export interface RegisterByStaffCommand {
 }
 
 // Temporary imports until backend connected
-import { getMockMembers, getMockTickets, Member, Ticket } from '@/context/MemberContext';
+import { getMockMembers, getMockTickets } from '@/features/members/model/mock-data';
+import { Member, Ticket } from '@/features/members/model/types';
 
 // Real API functions
 export const memberApi = {
@@ -871,71 +1020,5 @@ export function useTicketsList(options?: Omit<UseQueryOptions<Ticket[], Error>, 
 }
 
 // --- Schedule Hooks ---
+// Schedule API and Hooks moved to @/features/schedule
 
-// Temporary imports
-import { getWeeklySchedule, getReservations, ClassSession, Reservation, getRooms, getInstructorsWithColors } from '@/lib/mock-data';
-
-export const scheduleApi = {
-    getWeeklySchedule: async (date: Date): Promise<ClassSession[]> => {
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simulate delay
-        return getWeeklySchedule(date);
-    },
-    getReservations: async (): Promise<Reservation[]> => {
-        await new Promise(resolve => setTimeout(resolve, 600));
-        return getReservations();
-    },
-    getRooms: async () => {
-        await new Promise(resolve => setTimeout(resolve, 400));
-        return getRooms();
-    },
-    getInstructors: async () => {
-        await new Promise(resolve => setTimeout(resolve, 400));
-        return getInstructorsWithColors();
-    }
-};
-
-export const scheduleKeys = {
-    all: ['schedule'] as const,
-    week: (date: string) => ['schedule', 'week', date] as const,
-    reservations: ['reservations'] as const,
-    rooms: ['rooms'] as const,
-    instructors: ['schedule', 'instructors'] as const,
-};
-
-export function useWeeklySchedule(date: Date, options?: Omit<UseQueryOptions<ClassSession[], Error>, 'queryKey' | 'queryFn'>) {
-    // Round to start of week effectively in cache key
-    const dateKey = date.toISOString().split('T')[0];
-    return useQuery({
-        queryKey: scheduleKeys.week(dateKey),
-        queryFn: () => scheduleApi.getWeeklySchedule(date),
-        staleTime: 5 * 60 * 1000,
-        ...options
-    });
-}
-
-export function useReservations(options?: Omit<UseQueryOptions<Reservation[], Error>, 'queryKey' | 'queryFn'>) {
-    return useQuery({
-        queryKey: scheduleKeys.reservations,
-        queryFn: scheduleApi.getReservations,
-        staleTime: 1 * 60 * 1000, // Reservations change often
-        ...options
-    });
-}
-
-export function useRooms(options?: Omit<UseQueryOptions<any[], Error>, 'queryKey' | 'queryFn'>) {
-    return useQuery({
-        queryKey: scheduleKeys.rooms,
-        queryFn: scheduleApi.getRooms,
-        staleTime: 60 * 60 * 1000, // Rooms rarely change
-        ...options
-    });
-}
-
-export function useScheduleInstructors(options?: Omit<UseQueryOptions<any[], Error>, 'queryKey' | 'queryFn'>) {
-    return useQuery({
-        queryKey: scheduleKeys.instructors,
-        queryFn: scheduleApi.getInstructors,
-        staleTime: 10 * 60 * 1000,
-        ...options
-    });
-}

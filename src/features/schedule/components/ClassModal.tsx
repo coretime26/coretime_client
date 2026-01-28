@@ -3,7 +3,8 @@
 import { Modal, TextInput, Select, Button, Group, ColorInput, Stack } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { DateInput, TimeInput, DatePickerInput } from '@mantine/dates';
-import { getInstructorsWithColors, ClassSession } from '@/lib/mock-data';
+import { getInstructorsWithColors } from '../model/mock-data';
+import { ClassSession } from '@/features/schedule';
 import { useSettings } from '@/context/SettingsContext';
 import { IconClock, IconTrash } from '@tabler/icons-react';
 import { useRef, useEffect } from 'react';

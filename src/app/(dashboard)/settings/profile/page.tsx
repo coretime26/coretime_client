@@ -23,7 +23,7 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { modals } from '@mantine/modals';
 import { IconCamera, IconUser, IconPhone, IconMail, IconDeviceFloppy, IconX, IconUpload } from '@tabler/icons-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 import { profileApi, NotificationSettings } from '@/lib/api';
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';

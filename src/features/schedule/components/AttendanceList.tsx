@@ -1,7 +1,7 @@
 'use client';
 
 import { Table, SegmentedControl, Avatar, Group, Text, Badge } from '@mantine/core';
-import { Reservation } from '@/lib/mock-data';
+import { Reservation } from '@/features/schedule';
 import { modals } from '@mantine/modals';
 import { useSettings } from '@/context/SettingsContext';
 

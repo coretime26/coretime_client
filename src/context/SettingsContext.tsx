@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { TSID, getRooms, Room } from '@/lib/mock-data';
-export type { Room };
+import { TSID } from '@/lib/mock-data';
+import { Room } from '@/features/schedule';
+import { getRooms } from '@/features/schedule/model/mock-data';
 
 // --- Types ---
 

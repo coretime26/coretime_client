@@ -3,7 +3,7 @@
 import { Container, Title, Text, SimpleGrid, Paper, Stack, ThemeIcon } from '@mantine/core';
 import { IconBuildingStore, IconUserScreen } from '@tabler/icons-react';
 import { Suspense } from 'react';
-import { UserRole, useAuth } from '@/context/AuthContext';
+import { UserRole, useAuth } from '@/features/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
 import { notifications } from '@mantine/notifications';

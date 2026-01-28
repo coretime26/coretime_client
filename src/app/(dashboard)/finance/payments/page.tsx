@@ -4,17 +4,25 @@ import {
     Title, Text, Container, Group, Card, Table, Badge,
     Button, Modal, Select, Stack, Divider, NumberInput,
     Avatar, TextInput, Checkbox, ActionIcon, Box, LoadingOverlay, Center,
-    SegmentedControl, ThemeIcon, Loader
+    SegmentedControl, ThemeIcon, Loader, Grid
 } from '@mantine/core';
+import { DatePickerInput } from '@mantine/dates';
 import { useDisclosure } from '@mantine/hooks';
 import {
     IconPlus, IconReceipt, IconCreditCard, IconMoneybag, IconSearch,
     IconFilter, IconDotsVertical, IconRefresh, IconAlertCircle
 } from '@tabler/icons-react';
-import { useMembers } from '@/context/MemberContext';
+import { useMembers } from '@/features/members';
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
+import 'dayjs/locale/ko';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import { notifications } from '@mantine/notifications';
+
+dayjs.locale('ko');
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     paymentApi, ticketProductApi, Payment, CreatePaymentCommand,
@@ -25,201 +33,244 @@ import { useDebouncedValue } from '@mantine/hooks';
 
 export default function PaymentPage() {
     const queryClient = useQueryClient();
-    const { members } = useMembers();
+    const { data: members = [] } = useMembers();
 
     // UI States
     const [opened, { open, close }] = useDisclosure(false);
-    const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
     const [detailOpened, { open: openDetail, close: closeDetail }] = useDisclosure(false);
+    const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<string | null>('ALL');
+    const [debouncedSearch] = useDebouncedValue(search, 500);
+    const [statusFilter, setStatusFilter] = useState<string>('ALL');
+    const [hasUnpaidOnly, setHasUnpaidOnly] = useState(false);
+    const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([
+        dayjs().subtract(1, 'month').startOf('day').toDate(),
+        dayjs().endOf('day').toDate(),
+    ]);
 
-    // Data Fetching
-    const { data: payments = [], isLoading: isLoadingPayments } = useQuery({
-        queryKey: ['payments'],
-        queryFn: paymentApi.getAll,
+    // Queries
+    const { data: payments = [], isLoading } = useQuery({
+        queryKey: ['payments', debouncedSearch, dateRange, hasUnpaidOnly],
+        queryFn: () => paymentApi.getAll({
+            startDate: dateRange[0] ? dayjs(dateRange[0]).format('YYYY-MM-DD') : undefined,
+            endDate: dateRange[1] ? dayjs(dateRange[1]).format('YYYY-MM-DD') : undefined,
+            search: debouncedSearch || undefined,
+            hasUnpaid: hasUnpaidOnly || undefined
+        }),
     });
 
     const { data: products = [] } = useQuery({
-        queryKey: ['ticketProducts'],
-        queryFn: ticketProductApi.getAll,
+        queryKey: ['ticket-products'],
+        queryFn: () => ticketProductApi.getAll(),
     });
 
     // Mutations
     const createMutation = useMutation({
-        mutationFn: paymentApi.create,
+        mutationFn: (command: CreatePaymentCommand) => paymentApi.create(command),
         onSuccess: () => {
             notifications.show({
-                title: '결제 승인 완료',
-                message: '결제가 성공적으로 등록되었습니다.',
+                title: '결제 완료',
+                message: '수강권 판매 및 결제 처리가 완료되었습니다.',
                 color: 'green',
             });
             queryClient.invalidateQueries({ queryKey: ['payments'] });
+            queryClient.invalidateQueries({ queryKey: ['members'] });
             close();
         },
-        onError: () => {
+        onError: (error: any) => {
             notifications.show({
-                title: '오류 발생',
-                message: '결제 처리 중 문제가 발생했습니다.',
+                title: '결제 실패',
+                message: error.response?.data?.message || '결제 처리 중 오류가 발생했습니다.',
                 color: 'red',
             });
         },
     });
 
     const refundMutation = useMutation({
-        mutationFn: paymentApi.refund,
+        mutationFn: (paymentId: string) => paymentApi.refund(paymentId),
         onSuccess: () => {
             notifications.show({
                 title: '환불 완료',
-                message: '결제가 환불 처리되었습니다.',
+                message: '결제 환불 처리가 완료되었습니다.',
                 color: 'green',
             });
             queryClient.invalidateQueries({ queryKey: ['payments'] });
             closeDetail();
         },
-        onError: () => {
-            notifications.show({
-                title: '오류 발생',
-                message: '환불 처리 중 문제가 발생했습니다.',
-                color: 'red',
-            });
-        },
     });
-
-    // Filtering
-    const filteredPayments = useMemo(() => {
-        return payments.filter(payment => {
-            const matchesSearch = payment.memberName.includes(search) || payment.productName.includes(search);
-            const matchesStatus = statusFilter === 'ALL' || payment.status === statusFilter;
-            return matchesSearch && matchesStatus;
-        }).sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
-    }, [payments, search, statusFilter]);
-
-    // Handlers
-    const handleRowClick = (payment: Payment) => {
-        setSelectedPayment(payment);
-        openDetail();
-    };
-
-    const handleRefundConfirm = () => {
-        if (!selectedPayment) return;
-
-        modals.openConfirmModal({
-            title: '결제 환불',
-            children: (
-                <Text size="sm">
-                    이 결제 건을 환불 처리하시겠습니까?
-                    <br />
-                    환불 시 관련된 미수금 내역도 조정됩니다.
-                </Text>
-            ),
-            labels: { confirm: '환불 진행', cancel: '취소' },
-            confirmProps: { color: 'red' },
-            onConfirm: () => refundMutation.mutate(selectedPayment.id),
-        });
-    };
 
     const handleCreatePayment = (command: CreatePaymentCommand) => {
         createMutation.mutate(command);
     };
 
-    const getStatusColor = (status: PaymentStatus) => {
+    const handleRefundConfirm = () => {
+        if (!selectedPayment) return;
+        modals.openConfirmModal({
+            title: '결제 환불 확인',
+            children: (
+                <Text size="sm">
+                    정말로 이 결제 건을 환불 처리하시겠습니까? <br />
+                    연동된 수강권이 있는 경우 함께 취소될 수 있습니다.
+                </Text>
+            ),
+            labels: { confirm: '환불하기', cancel: '취소' },
+            confirmProps: { color: 'red' },
+            onConfirm: () => refundMutation.mutate(selectedPayment.id),
+        });
+    };
+
+    // For frontend-only status filtering since it's not in the provided API spec
+    const filteredPayments = useMemo(() => {
+        return payments.filter((payment: Payment) => {
+            return statusFilter === 'ALL' || payment.status === statusFilter;
+        }).sort((a: Payment, b: Payment) => dayjs(b.paidAt).diff(dayjs(a.paidAt)));
+    }, [payments, statusFilter]);
+
+    const getStatusColor = (status: string) => {
         switch (status) {
             case 'PAID': return 'green';
-            case 'REFUNDED': return 'gray';
-            case 'CANCELLED': return 'red';
+            case 'REFUNDED': return 'red';
+            case 'CANCELLED': return 'gray';
             default: return 'gray';
         }
     };
 
-    const getStatusLabel = (status: PaymentStatus) => {
+    const getStatusLabel = (status: string) => {
         switch (status) {
-            case 'PAID': return '결제 완료';
-            case 'REFUNDED': return '환불';
-            case 'CANCELLED': return '취소';
+            case 'PAID': return '결제완료';
+            case 'REFUNDED': return '환불완료';
+            case 'CANCELLED': return '취소됨';
             default: return status;
         }
     };
 
-    const hasPayments = payments.length > 0;
-
     return (
-        <Container size="xl" py="xl">
-            <LoadingOverlay visible={isLoadingPayments} />
+        <Container size="xl" py="lg">
+            <LoadingOverlay visible={createMutation.isPending || refundMutation.isPending} />
 
-            <Group justify="space-between" mb="lg">
-                <Box>
-                    <Title order={2}>결제 및 미수금</Title>
-                    <Text c="dimmed">매출 내역을 확인하고 수강권을 판매(결제)합니다.</Text>
-                </Box>
-                {hasPayments && (
-                    <Button leftSection={<IconPlus size={18} />} onClick={open} color="indigo">
-                        새 결제 (수강권 판매)
-                    </Button>
-                )}
+            <Group justify="space-between" mb="xl">
+                <div>
+                    <Title order={2} fw={700}>결제 및 미수금 관리</Title>
+                    <Text c="dimmed" size="sm">회원의 수강권 결제 내역과 미납 금액을 관리합니다.</Text>
+                </div>
+                <Button leftSection={<IconPlus size={18} />} onClick={open} color="indigo" size="md">
+                    새 결제 등록
+                </Button>
             </Group>
 
-            <Group mb="md">
-                <TextInput
-                    placeholder="회원명 또는 상품명 검색"
-                    leftSection={<IconSearch size={16} />}
-                    value={search}
-                    onChange={(e) => setSearch(e.currentTarget.value)}
-                    style={{ flex: 1, maxWidth: 300 }}
-                />
-                <Select
-                    placeholder="상태 필터"
-                    leftSection={<IconFilter size={16} />}
-                    data={[
-                        { value: 'ALL', label: '전체' },
-                        { value: 'PAID', label: '결제 완료' },
-                        { value: 'REFUNDED', label: '환불' },
-                    ]}
-                    value={statusFilter}
-                    onChange={setStatusFilter}
-                    allowDeselect={false}
-                    w={150}
-                />
-            </Group>
+            {/* Filter & Search Bar */}
+            <Card withBorder mb="lg" p="md" radius="md">
+                <Grid align="flex-end">
+                    <Grid.Col span={{ base: 12, md: 3 }}>
+                        <TextInput
+                            label="회원명/상품명"
+                            placeholder="검색어 입력..."
+                            leftSection={<IconSearch size={16} />}
+                            value={search}
+                            onChange={(e) => setSearch(e.currentTarget.value)}
+                        />
+                    </Grid.Col>
+                    <Grid.Col span={{ base: 12, md: 6 }}>
+                        <Group align="flex-end" gap="xs" grow>
+                            <DatePickerInput
+                                type="range"
+                                label="결제 기간"
+                                locale="ko"
+                                valueFormat="YYYY.MM.DD"
+                                placeholder="기간을 선택하세요"
+                                value={dateRange}
+                                onChange={(val: any) => setDateRange(val)}
+                                clearable
+                                style={{ flex: 1 }}
+                            />
+                            <Checkbox
+                                label="미수금만 보기"
+                                checked={hasUnpaidOnly}
+                                onChange={(e) => setHasUnpaidOnly(e.currentTarget.checked)}
+                                mb={8}
+                            />
+                        </Group>
+                    </Grid.Col>
+                    <Grid.Col span={{ base: 12, md: 3 }}>
+                        <Select
+                            label="상태"
+                            data={[
+                                { value: 'ALL', label: '전체 상태' },
+                                { value: 'PAID', label: '결제완료' },
+                                { value: 'REFUNDED', label: '환불완료' },
+                            ]}
+                            value={statusFilter}
+                            onChange={(val) => setStatusFilter(val || 'ALL')}
+                        />
+                    </Grid.Col>
+                </Grid>
+            </Card>
 
-            {/* Empty State */}
-            {!isLoadingPayments && !hasPayments ? (
-                <Card withBorder radius="md" p="xl" style={{ minHeight: 300, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <Stack align="center" gap="md">
-                        <IconCreditCard size={64} style={{ opacity: 0.2 }} />
-                        <Title order={3} c="dimmed">결제 내역이 없습니다</Title>
-                        <Text c="dimmed" ta="center">
-                            첫 번째 수강권 판매를 진행해보세요.
-                        </Text>
-                        <Button leftSection={<IconPlus size={18} />} onClick={open} mt="sm">
-                            새 결제 등록하기
-                        </Button>
-                    </Stack>
-                </Card>
-            ) : (
-                <Card withBorder radius="md" p={0} mb="xl">
-                    <Table highlightOnHover verticalSpacing="sm">
+            {/* Payments Table */}
+            {isLoading ? (
+                <Card withBorder padding={0} radius="md">
+                    <Table verticalSpacing="sm">
                         <Table.Thead bg="gray.0">
                             <Table.Tr>
-                                <Table.Th>결제 일시</Table.Th>
+                                <Table.Th><Loader size="xs" variant="dots" /></Table.Th>
+                                <Table.Th><Loader size="xs" variant="dots" /></Table.Th>
+                                <Table.Th><Loader size="xs" variant="dots" /></Table.Th>
+                                <Table.Th><Loader size="xs" variant="dots" /></Table.Th>
+                                <Table.Th><Loader size="xs" variant="dots" /></Table.Th>
+                                <Table.Th><Loader size="xs" variant="dots" /></Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                                <Table.Tr key={i}>
+                                    <Table.Td><Box h={20} bg="gray.1" style={{ borderRadius: 4, width: '80%' }} /></Table.Td>
+                                    <Table.Td><Box h={20} bg="gray.1" style={{ borderRadius: 4, width: '40%' }} /></Table.Td>
+                                    <Table.Td><Box h={20} bg="gray.1" style={{ borderRadius: 4, width: '60%' }} /></Table.Td>
+                                    <Table.Td><Box h={20} bg="gray.1" style={{ borderRadius: 4, width: '50%' }} /></Table.Td>
+                                    <Table.Td><Box h={20} bg="gray.1" style={{ borderRadius: 4, width: '30%' }} /></Table.Td>
+                                    <Table.Td><Box h={20} bg="gray.1" style={{ borderRadius: 4, width: '40%' }} /></Table.Td>
+                                </Table.Tr>
+                            ))}
+                        </Table.Tbody>
+                    </Table>
+                </Card>
+            ) : (
+                <Card withBorder padding={0} radius="md">
+                    <Table verticalSpacing="sm" highlightOnHover>
+                        <Table.Thead bg="gray.0">
+                            <Table.Tr>
+                                <Table.Th>결제일시</Table.Th>
                                 <Table.Th>회원명</Table.Th>
                                 <Table.Th>상품명</Table.Th>
-                                <Table.Th>결제 금액</Table.Th>
-                                <Table.Th>결제 수단</Table.Th>
+                                <Table.Th>결제금액</Table.Th>
+                                <Table.Th>수단</Table.Th>
                                 <Table.Th>상태</Table.Th>
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
-                            {filteredPayments.map((payment) => (
+                            {filteredPayments.map((payment: Payment) => (
                                 <Table.Tr
                                     key={payment.id}
-                                    onClick={() => handleRowClick(payment)}
+                                    onClick={() => {
+                                        setSelectedPayment(payment);
+                                        openDetail();
+                                    }}
                                     style={{ cursor: 'pointer' }}
                                 >
                                     <Table.Td>{dayjs(payment.paidAt).format('YY.MM.DD HH:mm')}</Table.Td>
                                     <Table.Td fw={500}>{payment.memberName}</Table.Td>
                                     <Table.Td>{payment.productName}</Table.Td>
-                                    <Table.Td fw={700}>{payment.amount.toLocaleString()}원</Table.Td>
+                                    <Table.Td fw={700}>
+                                        <Stack gap={0}>
+                                            <Text size="sm" fw={700}>{Number(payment.amount).toLocaleString()}원</Text>
+                                            {payment.unpaidAmount && payment.unpaidAmount > 0 && (
+                                                <Group gap={4}>
+                                                    <IconAlertCircle size={12} color="var(--mantine-color-red-6)" />
+                                                    <Text size="xs" c="red" fw={700}>미수: {Number(payment.unpaidAmount).toLocaleString()}원</Text>
+                                                </Group>
+                                            )}
+                                        </Stack>
+                                    </Table.Td>
                                     <Table.Td>
                                         <Badge size="sm" variant="outline" color="gray">
                                             {payment.method === 'CARD' ? '카드' : payment.method === 'TRANSFER' ? '계좌이체' : '현금'}
@@ -269,12 +320,35 @@ export default function PaymentPage() {
                             <Text c="dimmed">상품명</Text>
                             <Text>{selectedPayment.productName}</Text>
                         </Group>
+                        <Divider />
                         <Group justify="space-between">
-                            <Text c="dimmed">결제 금액</Text>
+                            <Text c="dimmed">상품 원가</Text>
+                            <Text>{Number(selectedPayment.totalAmount || selectedPayment.amount).toLocaleString()}원</Text>
+                        </Group>
+                        {selectedPayment.discountAmount !== undefined && (
+                            <Group justify="space-between">
+                                <Text c="dimmed">할인 금액</Text>
+                                <Text c="red">-{Number(selectedPayment.discountAmount).toLocaleString()}원</Text>
+                            </Group>
+                        )}
+                        <Group justify="space-between">
+                            <Text c="dimmed">실 결제액</Text>
                             <Text fw={700} c="indigo">
-                                {new Intl.NumberFormat('ko-KR').format(selectedPayment.amount)}원
+                                {Number(selectedPayment.amount).toLocaleString()}원
                             </Text>
                         </Group>
+                        {selectedPayment.unpaidAmount && selectedPayment.unpaidAmount > 0 && (
+                            <Group justify="space-between">
+                                <Text fw={600} c="red">미수금</Text>
+                                <Stack gap={0} align="flex-end">
+                                    <Text fw={700} c="red">{Number(selectedPayment.unpaidAmount).toLocaleString()}원</Text>
+                                    {selectedPayment.unpaidDueDate && (
+                                        <Text size="xs" c="dimmed">지불 기한: {selectedPayment.unpaidDueDate}</Text>
+                                    )}
+                                </Stack>
+                            </Group>
+                        )}
+                        <Divider />
                         <Group justify="space-between">
                             <Text c="dimmed">결제 수단</Text>
                             <Badge color="gray">
@@ -323,7 +397,14 @@ function PaymentModal({ opened, onClose, products, onProcess, isLoading }: {
     const [debouncedSearch] = useDebouncedValue(memberSearch, 300);
     const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
     const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-    const [amount, setAmount] = useState<number | ''>('');
+
+    // States for detailed amounts
+    const [basePrice, setBasePrice] = useState<number>(0);
+    const [discount, setDiscount] = useState<number>(0);
+    const [paidAmount, setPaidAmount] = useState<number | ''>('');
+    const [isManualPaid, setIsManualPaid] = useState(false);
+    const [unpaidDate, setUnpaidDate] = useState<Date | null>(null);
+
     const [method, setMethod] = useState<PaymentMethod>('CARD');
     const [autoRegister, setAutoRegister] = useState(true);
 
@@ -340,30 +421,44 @@ function PaymentModal({ opened, onClose, products, onProcess, isLoading }: {
             setMemberSearch('');
             setSelectedMemberId(null);
             setSelectedProductId(null);
-            setAmount('');
+            setBasePrice(0);
+            setDiscount(0);
+            setPaidAmount('');
+            setIsManualPaid(false);
+            setUnpaidDate(null);
             setMethod('CARD');
             setAutoRegister(true);
         }
     }, [opened]);
 
     const productDetails = useMemo(() =>
-        products.find(p => p.id.toString() === selectedProductId),
+        products.find((p: TicketProduct) => p.id.toString() === selectedProductId),
         [products, selectedProductId]
     );
 
-    // Auto-fill price when product selected
+    // Sync state when product or discount changes
     useMemo(() => {
         if (productDetails) {
-            setAmount(productDetails.price);
+            setBasePrice(productDetails.price);
+            if (!isManualPaid) {
+                setPaidAmount(productDetails.price - discount);
+            }
         }
-    }, [productDetails]);
+    }, [productDetails, discount, isManualPaid]);
+
+    const netAmount = basePrice - discount;
+    const unpaidAmount = typeof paidAmount === 'number' ? netAmount - paidAmount : 0;
 
     const handleProcess = () => {
-        if (selectedMemberId && selectedProductId && amount !== '') {
+        if (selectedMemberId && selectedProductId && paidAmount !== '') {
             onProcess({
                 membershipId: selectedMemberId,
                 productId: selectedProductId,
-                amount: Number(amount),
+                totalAmount: basePrice,
+                discountAmount: discount,
+                amount: Number(paidAmount),
+                unpaidAmount: unpaidAmount > 0 ? unpaidAmount : undefined,
+                unpaidDueDate: unpaidDate ? dayjs(unpaidDate).format('YYYY-MM-DD') : undefined,
                 method: method,
                 autoIssue: autoRegister,
             });
@@ -374,7 +469,7 @@ function PaymentModal({ opened, onClose, products, onProcess, isLoading }: {
         <Modal
             opened={opened}
             onClose={onClose}
-            title={<Text fw={700} size="lg">수강권 판매</Text>}
+            title={<Text fw={700} size="lg">수강권 판매 및 정산</Text>}
             size="lg"
             centered
             overlayProps={{ backgroundOpacity: 0.55, blur: 3 }}
@@ -400,9 +495,6 @@ function PaymentModal({ opened, onClose, products, onProcess, isLoading }: {
                                 <Stack align="center" gap="xs" py="sm">
                                     <IconSearch size={24} style={{ opacity: 0.3 }} />
                                     <Text size="sm" c="dimmed">검색 결과가 없습니다.</Text>
-                                    <Button variant="light" size="compact-xs" leftSection={<IconPlus size={12} />}>
-                                        신규 회원 등록하러 가기
-                                    </Button>
                                 </Stack>
                             ) : "회원을 검색해주세요"
                         }
@@ -411,7 +503,7 @@ function PaymentModal({ opened, onClose, products, onProcess, isLoading }: {
                     />
 
                     <Select
-                        label="상품 선택"
+                        label="수강권 선택"
                         placeholder="판매할 수강권 상품 선택"
                         data={products.map(p => ({
                             value: p.id.toString(),
@@ -426,50 +518,90 @@ function PaymentModal({ opened, onClose, products, onProcess, isLoading }: {
 
                 {/* 상품 미리보기 카드 */}
                 {productDetails && (
-                    <Card
-                        withBorder
-                        padding="lg"
-                        radius="md"
-                        bg="var(--mantine-color-indigo-0)"
-                        style={{ borderColor: 'var(--mantine-color-indigo-2)' }}
-                    >
-                        <Group justify="space-between" align="flex-start">
-                            <Stack gap={4}>
-                                <Badge color="indigo" variant="light">선택된 상품</Badge>
-                                <Text fw={700} size="lg" mt={4}>{productDetails.name}</Text>
-                                <Group gap="xs" c="dimmed" fz="sm">
-                                    <Text span>{productDetails.sessionCount}회</Text>
-                                    <Divider orientation="vertical" />
-                                    <Text span>{productDetails.durationDays}일 유효</Text>
-                                </Group>
-                            </Stack>
-                            <ThemeIcon size={48} radius="md" color="indigo" variant="white">
-                                <IconReceipt size={28} />
-                            </ThemeIcon>
+                    <Card withBorder padding="md" radius="md" bg="gray.0">
+                        <Group justify="space-between">
+                            <Box>
+                                <Text fw={700}>{productDetails.name}</Text>
+                                <Text size="xs" c="dimmed">{productDetails.sessionCount}회 / {productDetails.durationDays}일</Text>
+                            </Box>
+                            <Text fw={700} c="indigo">{Number(productDetails.price).toLocaleString()}원</Text>
                         </Group>
                     </Card>
                 )}
 
                 <Divider />
 
-                {/* 2. 결제 정보 섹션 */}
+                {/* 2. 결제 및 미수금 상세 설정 */}
                 <Stack gap="md">
-                    <Text size="sm" fw={700} c="dimmed" tt="uppercase">2. 결제 처리</Text>
+                    <Text size="sm" fw={700} c="dimmed" tt="uppercase">2. 결제 및 미수금 설정</Text>
 
-                    <NumberInput
-                        label="최종 결제 금액"
-                        placeholder="0"
-                        value={amount}
-                        onChange={(val) => setAmount(val === '' ? '' : Number(val))}
-                        required
-                        leftSection={<IconMoneybag size={16} />}
-                        thousandSeparator=","
-                        prefix="₩ "
-                        size="md"
-                        styles={{
-                            input: { fontWeight: 700, fontSize: '18px', color: 'var(--mantine-color-indigo-7)' }
-                        }}
-                    />
+                    <Grid gutter="md">
+                        <Grid.Col span={6}>
+                            <NumberInput
+                                label="상품 원가"
+                                value={basePrice}
+                                readOnly
+                                variant="filled"
+                                thousandSeparator=","
+                                suffix="원"
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                            <NumberInput
+                                label="현장 할인 금액"
+                                value={discount}
+                                onChange={(val: string | number) => setDiscount(Number(val) || 0)}
+                                min={0}
+                                max={basePrice}
+                                thousandSeparator=","
+                                suffix="원"
+                                color="red"
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                            <NumberInput
+                                label="실제 결제 금액"
+                                placeholder="0"
+                                value={paidAmount}
+                                onChange={(val: string | number) => {
+                                    setPaidAmount(val === '' ? '' : Number(val));
+                                    setIsManualPaid(true);
+                                }}
+                                required
+                                thousandSeparator=","
+                                suffix="원"
+                                styles={{ input: { fontWeight: 700, fontSize: '16px', border: '2px solid var(--mantine-color-indigo-2)' } }}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                            <Card withBorder padding="7px 12px" radius="sm" bg={unpaidAmount > 0 ? "red.0" : "gray.0"}>
+                                <Text size="xs" c="dimmed">최종 미수금 (Receivable)</Text>
+                                <Text fw={700} c={unpaidAmount > 0 ? "red.7" : "gray.6"}>
+                                    {Number(unpaidAmount).toLocaleString()}원
+                                </Text>
+                            </Card>
+                        </Grid.Col>
+                    </Grid>
+
+                    {unpaidAmount > 0 && (
+                        <Card withBorder radius="md" p="sm" bg="orange.0" style={{ borderColor: 'var(--mantine-color-orange-2)' }}>
+                            <Group gap="xs" mb={4}>
+                                <IconAlertCircle size={14} color="var(--mantine-color-orange-7)" />
+                                <Text size="xs" fw={600} c="orange.8">미수금 처리 안내</Text>
+                            </Group>
+                            <Text size="xs" c="orange.9" mb="xs">결제 금액이 부족하여 미수금이 발생합니다. 지불 기한을 설정하시겠습니까?</Text>
+                            <DatePickerInput
+                                size="xs"
+                                locale="ko"
+                                valueFormat="YYYY.MM.DD"
+                                placeholder="미수금 지불 기한 선택 (선택)"
+                                value={unpaidDate}
+                                onChange={(val: any) => setUnpaidDate(val)}
+                                clearable
+                                minDate={new Date()}
+                            />
+                        </Card>
+                    )}
 
                     <Box>
                         <Text size="sm" fw={500} mb={8}>결제 수단</Text>
@@ -478,61 +610,33 @@ function PaymentModal({ opened, onClose, products, onProcess, isLoading }: {
                             value={method}
                             onChange={(val) => setMethod(val as PaymentMethod)}
                             data={[
-                                {
-                                    value: 'CARD',
-                                    label: (
-                                        <Center style={{ gap: 10 }}>
-                                            <IconCreditCard size={16} />
-                                            <span>카드</span>
-                                        </Center>
-                                    )
-                                },
-                                {
-                                    value: 'TRANSFER',
-                                    label: (
-                                        <Center style={{ gap: 10 }}>
-                                            <IconMoneybag size={16} />
-                                            <span>계좌이체</span>
-                                        </Center>
-                                    )
-                                },
-                                {
-                                    value: 'CASH',
-                                    label: (
-                                        <Center style={{ gap: 10 }}>
-                                            <IconMoneybag size={16} />
-                                            <span>현금</span>
-                                        </Center>
-                                    )
-                                },
+                                { value: 'CARD', label: '카드' },
+                                { value: 'TRANSFER', label: '계좌이체' },
+                                { value: 'CASH', label: '현금' },
                             ]}
                         />
                     </Box>
 
-                    <Card withBorder radius="md" p="sm" bg="gray.0">
-                        <Checkbox
-                            label="결제 즉시 수강권 자동 등록"
-                            description="체크 시 회원의 보유 수강권 목록에 자동으로 추가됩니다."
-                            checked={autoRegister}
-                            onChange={(e) => setAutoRegister(e.currentTarget.checked)}
-                            color="indigo"
-                        />
-                    </Card>
+                    <Checkbox
+                        label="결제 즉시 수강권 자동 등록"
+                        checked={autoRegister}
+                        onChange={(e) => setAutoRegister(e.currentTarget.checked)}
+                        size="sm"
+                    />
                 </Stack>
 
                 <Button
                     mt="md"
-                    size="xl"
-                    disabled={!selectedMemberId || !selectedProductId || amount === ''}
+                    size="lg"
+                    disabled={!selectedMemberId || !selectedProductId || paidAmount === ''}
                     loading={isLoading}
                     onClick={handleProcess}
                     color="indigo"
-                    rightSection={<IconCreditCard size={20} />}
+                    fullWidth
                 >
-                    {amount ? `${new Intl.NumberFormat('ko-KR').format(Number(amount))}원 결제 승인` : '결제 승인'}
+                    {paidAmount ? `${Number(paidAmount).toLocaleString()}원 결제 승인` : '판매 등록'}
                 </Button>
             </Stack>
         </Modal>
     );
 }
-

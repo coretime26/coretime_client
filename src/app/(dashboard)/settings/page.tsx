@@ -6,7 +6,8 @@ import {
     Switch, Divider, SimpleGrid, Card, Badge, ThemeIcon
 } from '@mantine/core';
 import { IconTrash, IconPlus, IconSettings, IconClock, IconAlertCircle, IconBuildingStore } from '@tabler/icons-react';
-import { useSettings, ClassCategory, Room } from '@/context/SettingsContext';
+import { useSettings, ClassCategory } from '@/context/SettingsContext';
+import { Room } from '@/features/schedule';
 import { useState } from 'react';
 import { useForm } from '@mantine/form';
 

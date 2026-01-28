@@ -2,17 +2,17 @@
 
 import { useState } from 'react';
 import { Group, Box, Paper, Text, Button, SegmentedControl } from '@mantine/core';
-import { CalendarSidebar } from '@/components/schedule/CalendarSidebar';
-import { WeeklyCalendar } from '@/components/schedule/WeeklyCalendar';
-import { MonthlyCalendar } from '@/components/schedule/MonthlyCalendar';
-import { ClassModal } from '@/components/schedule/ClassModal';
+import { CalendarSidebar } from '@/features/schedule/components/CalendarSidebar';
+import { WeeklyCalendar } from '@/features/schedule/components/WeeklyCalendar';
+import { MonthlyCalendar } from '@/features/schedule/components/MonthlyCalendar';
+import { ClassModal } from '@/features/schedule/components/ClassModal';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 
 
-import { useWeeklySchedule, useRooms, useScheduleInstructors } from '@/lib/api';
-import { ScheduleSkeleton } from '@/components/dashboard/schedule/ScheduleSkeleton';
+import { useWeeklySchedule, useRooms, useScheduleInstructors } from '@/features/schedule';
+import { ScheduleSkeleton } from '@/features/schedule/components/ScheduleSkeleton';
 
 export default function CalendarPage() {
     const [selectedInstructors, setSelectedInstructors] = useState<string[]>([]);

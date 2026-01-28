@@ -1,7 +1,8 @@
 'use client';
 
 import { Box, Text, Paper, Group, Stack, Badge, Grid } from '@mantine/core';
-import { ClassSession, getWeeklySchedule } from '@/lib/mock-data';
+import { ClassSession } from '@/features/schedule';
+import { getWeeklySchedule } from '../model/mock-data';
 import dayjs from 'dayjs';
 import { useState, useEffect } from 'react';
 

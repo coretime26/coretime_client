@@ -4,7 +4,8 @@ import { Box, Text, Paper, Group, Button, Modal, Stack, Grid, Avatar } from '@ma
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconClock, IconMapPin } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { ClassSession, getWeeklySchedule, TSID } from '@/lib/mock-data';
+import { ClassSession, TSID } from '@/features/schedule';
+import { getWeeklySchedule } from '../model/mock-data';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
 

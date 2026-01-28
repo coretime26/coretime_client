@@ -13,34 +13,30 @@ import {
     IconEdit, IconUserPlus, IconTicket, IconNote, IconPhone,
     IconDeviceMobileMessage
 } from '@tabler/icons-react';
-import { useMembers, Member } from '@/context/MemberContext';
+import { useMembers, useMemberTickets, Member, membersApi, MemberTicketResult } from '@/features/members';
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import MemberFormModal from '@/components/dashboard/members/MemberFormModal';
 import ConsultationLogList from '@/components/dashboard/members/ConsultationLogList';
 import AlimTalkModal from '@/components/dashboard/members/AlimTalkModal';
 import { MemberTableSkeleton } from '@/components/dashboard/members/MemberSkeleton';
-import { memberApi } from '@/lib/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function MemberListPage() {
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
-    // Use Real API Hook
-    const { data: members = [], isLoading } = useQuery({
-        queryKey: ['members', { search, statusFilter }],
-        queryFn: () => memberApi.getMembers({
-            search: search || undefined,
-            status: statusFilter.length > 0 ? statusFilter.join(',') : undefined
-        }),
+    // Use Real API Hook via feature hook
+    const { data: members = [], isLoading } = useMembers({
+        search: search || undefined,
+        status: statusFilter.length > 0 ? statusFilter : undefined
     });
 
     // Mock tickets needed temporarily for display compatibility
-    const { tickets } = useMembers();
+    // const { data: tickets = [] } = useMemberTickets(); // [REMOVED] Now using member.tickets from API
 
     // UI States
-    const [selectedMember, setSelectedMember] = useState<any | null>(null); // Relaxed type for transition
+    const [selectedMember, setSelectedMember] = useState<Member | null>(null);
     const [drawerOpened, { open: openDrawer, close: closeDrawer }] = useDisclosure(false);
 
     // Modals
@@ -51,7 +47,7 @@ export default function MemberListPage() {
     const [alimTalkTarget, setAlimTalkTarget] = useState<any | null>(null);
 
     // Handlers
-    const handleRowClick = (member: any) => {
+    const handleRowClick = (member: Member) => {
         setSelectedMember(member);
         openDrawer();
     };
@@ -127,9 +123,9 @@ export default function MemberListPage() {
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
-                            {members.length > 0 ? members.map((member) => {
+                            {members.length > 0 ? members.map((member: Member) => {
                                 // Find active ticket (simplified: mock compatibility)
-                                const memberTicket = tickets.find(t => t.memberId === String(member.id) && t.status === 'ACTIVE');
+                                // [REMOVED] Ticket info is now in member.tickets
 
                                 return (
                                     <Table.Tr key={member.id} style={{ cursor: 'pointer' }} onClick={() => handleRowClick(member)}>
@@ -156,11 +152,22 @@ export default function MemberListPage() {
                                         </Table.Td>
                                         <Table.Td>{member.phone}</Table.Td>
                                         <Table.Td>
-                                            {memberTicket ? (
-                                                <Text size="sm">{memberTicket.name} ({memberTicket.remainingCount}회)</Text>
-                                            ) : (
-                                                <Text size="sm" c="dimmed">-</Text>
-                                            )}
+                                            <Group gap={4}>
+                                                {member.tickets && member.tickets.length > 0 ? (
+                                                    <>
+                                                        <Text size="sm" c="dark.3">
+                                                            {member.tickets[0].name} <Text span c="indigo" fw={600}>({member.tickets[0].remainingCount}회)</Text>
+                                                        </Text>
+                                                        {member.tickets.length > 1 && (
+                                                            <Badge size="sm" variant="light" color="gray" px={6}>
+                                                                +{member.tickets.length - 1}
+                                                            </Badge>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <Text size="sm" c="dimmed">-</Text>
+                                                )}
+                                            </Group>
                                         </Table.Td>
                                         <Table.Td>
                                             {member.lastAttendanceAt ? dayjs(member.lastAttendanceAt).format('YY.MM.DD') : '-'}
@@ -228,6 +235,9 @@ export default function MemberListPage() {
 
 // --- Drawer Component ---
 
+
+// --- Drawer Component ---
+
 function MemberDrawer({
     opened,
     onClose,
@@ -242,21 +252,16 @@ function MemberDrawer({
     onSendAlimTalk: () => void
 }) {
     const queryClient = useQueryClient();
-    const { tickets } = useMembers();
+
+    // Fetch tickets ONLY for this member, and ONLY when member exists
+    const { data: memberTickets = [] } = useMemberTickets(member?.id, {
+        enabled: !!member?.id
+    });
 
     const noteMutation = useMutation({
         mutationFn: async ({ id, note }: { id: string, note: string }) => {
-            const membershipId = id;
-
             if (!member) return;
-            return memberApi.updateMember(membershipId, {
-                name: member.name,
-                phone: member.phone,
-                pinnedNote: note,
-                gender: member.gender as any,
-                status: member.status,
-                birthDate: member.birthDate || undefined
-            });
+            return membersApi.updateNote(id, note);
         },
         onSuccess: () => {
             notifications.show({
@@ -264,7 +269,8 @@ function MemberDrawer({
                 message: '특이사항이 업데이트되었습니다.',
                 color: 'green'
             });
-            queryClient.invalidateQueries({ queryKey: ['members'] });
+            // Invalidating specific member detail and list to reflect note change (e.g. pinned note icon)
+            if (member) queryClient.invalidateQueries({ queryKey: ['members'] });
             setIsEditingNote(false);
         },
         onError: () => {
@@ -287,8 +293,6 @@ function MemberDrawer({
     }, [member]);
 
     if (!member) return null;
-
-    const memberTickets = tickets.filter(t => t.memberId === member.id);
 
     const handleSaveNote = () => {
         if (member) {
@@ -369,10 +373,10 @@ function MemberDrawer({
 
                     <Tabs.Panel value="tickets" pt="md">
                         <Stack>
-                            {memberTickets.length > 0 ? memberTickets.map(ticket => (
+                            {memberTickets.length > 0 ? memberTickets.map((ticket: MemberTicketResult) => (
                                 <Card key={ticket.id} withBorder radius="md">
                                     <Group justify="space-between" mb="xs">
-                                        <Text fw={600} size="sm">{ticket.name}</Text>
+                                        <Text fw={600} size="sm">{ticket.ticketName}</Text>
                                         <Badge size="sm" variant="dot" color={ticket.status === 'ACTIVE' ? 'green' : 'gray'}>
                                             {ticket.status}
                                         </Badge>

@@ -5,7 +5,7 @@ import { IconBuilding, IconPlus, IconArrowRight, IconRefresh } from '@tabler/ico
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi, OrganizationDto } from '@/lib/api';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 
 export default function MyCentersPage() {
     const { user } = useAuth();
