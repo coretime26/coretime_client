@@ -64,6 +64,10 @@ const getNavItems = (role: UserRole): NavItem[] => {
                 label: '강사 관리',
                 icon: IconUserCheck,
                 link: '/center/instructors',
+                children: [
+                    { label: '강사 조회', link: '/center/instructors' },
+                    { label: '강사 등록/승인', link: '/center/instructors?tab=management' },
+                ]
             },
             {
                 label: '매출 및 결제',
