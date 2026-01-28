@@ -2,7 +2,7 @@ import { Modal, Textarea, Button, Group, Text, Box } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { IconDeviceMobileMessage } from '@tabler/icons-react';
-import { Member } from '@/context/MemberContext';
+import { Member } from '@/features/members';
 import { useEffect } from 'react';
 
 interface AlimTalkModalProps {

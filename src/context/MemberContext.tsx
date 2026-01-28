@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { TSID } from '@/lib/mock-data';
 import { useMembersList, useTicketsList } from '@/lib/api';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 
 // --- Types ---
 

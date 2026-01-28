@@ -3,7 +3,7 @@
 import { Container, Title, Text, Stack, TextInput, Button, Paper, Grid, LoadingOverlay, SegmentedControl } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 
 import { authApi } from '@/lib/api'; // Import authApi
 import { Select, Modal, ThemeIcon, Center } from '@mantine/core'; // Added Modal, ThemeIcon, Center

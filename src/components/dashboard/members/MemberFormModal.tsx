@@ -8,7 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { memberApi, UpdateMemberCommand, RegisterByStaffCommand } from '@/lib/api';
 import { notifications } from '@mantine/notifications';
 import { useSession } from 'next-auth/react';
-import { Member } from '@/context/MemberContext';
+import { Member } from '@/features/members';
 
 interface MemberFormModalProps {
     opened: boolean;

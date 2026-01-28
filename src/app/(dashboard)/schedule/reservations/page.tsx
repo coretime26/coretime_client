@@ -15,12 +15,12 @@ import {
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { RESERVATIONS, CLASSES, Reservation, TSID } from '@/lib/mock-data';
-import { useMembers, Member } from '@/context/MemberContext';
+import { useMembers, Member } from '@/features/members';
 import AlimTalkModal from '@/components/dashboard/members/AlimTalkModal';
 import { notifications } from '@mantine/notifications';
 
 export default function ReservationManagementPage() {
-    const { members } = useMembers(); // Use MemberContext to look up ticket info
+    const { data: members = [] } = useMembers(); // Use useMembers hook to look up ticket info
     const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([
         dayjs().startOf('week').toDate(),
         dayjs().endOf('week').toDate()
@@ -325,7 +325,7 @@ export default function ReservationManagementPage() {
                     <Select
                         label="회원 선택"
                         placeholder="이름 또는 전화번호 검색"
-                        data={members.map(m => ({ label: `${m.name} (${m.phone})`, value: m.id }))}
+                        data={members.map(m => ({ label: `${m.name} (${m.phone})`, value: m.id.toString() }))}
                         searchable
                         required
                     />

@@ -195,7 +195,7 @@ export interface RefundResult {
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL + "/api/v1" || 'http://localhost:8080/api/v1';
 
-const api = axios.create({
+export const api = axios.create({
     baseURL: BASE_URL,
     transformResponse: [
         (data) => {
@@ -812,7 +812,8 @@ export interface RegisterByStaffCommand {
 }
 
 // Temporary imports until backend connected
-import { getMockMembers, getMockTickets, Member, Ticket } from '@/context/MemberContext';
+import { getMockMembers, getMockTickets } from '@/features/members/model/mock-data';
+import { Member, Ticket } from '@/features/members/model/types';
 
 // Real API functions
 export const memberApi = {

@@ -6,14 +6,14 @@ import {
 } from '@mantine/core';
 import { DatePickerInput } from '@mantine/dates';
 import { IconSearch, IconMessageCircle, IconTag, IconPlus, IconCheck } from '@tabler/icons-react';
-import { useMembers } from '@/context/MemberContext';
+import { useMembers } from '@/features/members';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
 import dayjs from 'dayjs';
 
 export default function ConsultationLogsPage() {
-    const { members } = useMembers();
+    const { data: members = [] } = useMembers();
 
     // Modal State
     const [opened, { open, close }] = useDisclosure(false);
@@ -143,7 +143,7 @@ export default function ConsultationLogsPage() {
                 <Select
                     label="회원 선택"
                     placeholder="회원을 검색하세요"
-                    data={members.map(m => ({ value: m.id, label: `${m.name} (${m.phone})` }))}
+                    data={members.map(m => ({ value: m.id.toString(), label: `${m.name} (${m.phone})` }))}
                     searchable
                     mb="sm"
                     value={formData.memberId}

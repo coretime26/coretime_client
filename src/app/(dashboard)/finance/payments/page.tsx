@@ -11,7 +11,7 @@ import {
     IconPlus, IconReceipt, IconCreditCard, IconMoneybag, IconSearch,
     IconFilter, IconDotsVertical, IconRefresh, IconAlertCircle
 } from '@tabler/icons-react';
-import { useMembers } from '@/context/MemberContext';
+import { useMembers } from '@/features/members';
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { notifications } from '@mantine/notifications';
@@ -25,7 +25,7 @@ import { useDebouncedValue } from '@mantine/hooks';
 
 export default function PaymentPage() {
     const queryClient = useQueryClient();
-    const { members } = useMembers();
+    const { data: members = [] } = useMembers();
 
     // UI States
     const [opened, { open, close }] = useDisclosure(false);

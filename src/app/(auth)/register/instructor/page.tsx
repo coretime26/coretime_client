@@ -3,7 +3,7 @@
 import { Container, Title, Text, Stack, PinInput, Button, Card, ThemeIcon, Transition, Divider, Modal, TextInput, ScrollArea, Avatar, UnstyledButton, Group, Paper } from '@mantine/core'; // Added Paper
 import { useState, useEffect } from 'react';
 import { IconCheck, IconBuilding, IconSearch } from '@tabler/icons-react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 import { useDisclosure } from '@mantine/hooks';
 import { authApi } from '@/lib/api';
 import { notifications } from '@mantine/notifications';

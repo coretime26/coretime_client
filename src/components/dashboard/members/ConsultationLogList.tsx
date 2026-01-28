@@ -1,6 +1,6 @@
 import { Stack, Button, Text, Group, Card, Textarea, Avatar, Badge, Select } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { ConsultationLog, useMembers } from '@/context/MemberContext';
+import { ConsultationLog, useConsultationLogs, useAddConsultationLog } from '@/features/members';
 import { IconPlus, IconMessageCircle } from '@tabler/icons-react';
 import { useState } from 'react';
 import dayjs from 'dayjs';
@@ -10,16 +10,18 @@ interface ConsultationLogListProps {
 }
 
 export default function ConsultationLogList({ memberId }: ConsultationLogListProps) {
-    const { logs, addLog } = useMembers(); // In real app, might want to fetch logs for this user
+    const { data: logs = [] } = useConsultationLogs(memberId);
+    const { mutate: addLog } = useAddConsultationLog();
     const [isAdding, setIsAdding] = useState(false);
 
-    // Filter logs for this member
-    const memberLogs = logs.filter(l => l.memberId === memberId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Filter logs for this member (redundant if hook filters, but safe)
+    const memberLogs = logs.filter((l: ConsultationLog) => l.memberId === memberId)
+        .sort((a: ConsultationLog, b: ConsultationLog) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     const form = useForm({
         initialValues: {
             content: '',
-            type: 'GENERAL', // Just a simplified tag usage for now
+            type: 'GENERAL',
         },
         validate: {
             content: (value) => (value.trim().length > 0 ? null : '내용을 입력해주세요.'),
@@ -32,7 +34,7 @@ export default function ConsultationLogList({ memberId }: ConsultationLogListPro
             instructorId: 'INS_CURRENT', // Mock current user
             instructorName: 'Current Instructor', // Mock current user name
             content: values.content,
-            tags: [values.type === 'GENERAL' ? '#상담' : '#운동'], // Simple tagging
+            tags: [values.type === 'GENERAL' ? '#상담' : '#운동'],
         });
         setIsAdding(false);
         form.reset();
@@ -73,13 +75,13 @@ export default function ConsultationLogList({ memberId }: ConsultationLogListPro
             )}
 
             {memberLogs.length > 0 ? (
-                memberLogs.map(log => (
-                    <Card key={log.id} withBorder radius="md" p="md">
+                memberLogs.map((log: ConsultationLog) => (
+                    <Card key={String(log.id)} withBorder radius="md" p="md">
                         <Group justify="space-between" align="start" mb={4}>
                             <Group gap="xs">
                                 <Avatar size="sm" radius="xl" color="blue" name={log.instructorName} />
                                 <Text size="sm" fw={600}>{log.instructorName}</Text>
-                                {log.tags.map(tag => (
+                                {log.tags.map((tag: string) => (
                                     <Badge key={tag} size="xs" variant="dot" color="gray">{tag}</Badge>
                                 ))}
                             </Group>

@@ -18,7 +18,7 @@ import {
     IconUserCheck
 } from '@tabler/icons-react';
 import { BrandLogo } from '@/components/common/BrandLogo';
-import { useAuth, UserRole } from '@/context/AuthContext';
+import { useAuth, UserRole } from '@/features/auth';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { authApi, useMyOrganizations, OrganizationResult } from '@/lib/api'; // Added useMyOrganizations

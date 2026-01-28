@@ -1,7 +1,7 @@
 'use client';
 
 import { Container, Paper, Title, Text, Button, Group, Stack, Box, Divider, Anchor, Modal, ScrollArea, Avatar, ThemeIcon, Transition } from '@mantine/core';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 import { BrandLogo } from '@/components/common/BrandLogo';
 import { useDisclosure } from '@mantine/hooks';
 import { useSearchParams, useRouter } from 'next/navigation';

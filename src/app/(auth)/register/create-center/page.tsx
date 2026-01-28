@@ -3,7 +3,7 @@
 import { Container, Title, Text, Stack, TextInput, Button, Paper, Grid, LoadingOverlay, Select } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/features/auth';
 import { authApi } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { notifications } from '@mantine/notifications';
