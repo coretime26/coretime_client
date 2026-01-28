@@ -59,7 +59,7 @@ export default function RegisterInstructorPage() {
                     message: '가입 신청이 완료되었습니다.',
                     color: 'green'
                 });
-                // Open Success Modal instead of redirecting
+
                 openSuccess();
 
 
@@ -120,7 +120,8 @@ export default function RegisterInstructorPage() {
                     color: 'green'
                 });
                 // Open Success Modal instead of redirecting
-                openSuccess();
+                // openSuccess();
+                openPending();
 
             } catch (error: any) {
                 console.error(error);
