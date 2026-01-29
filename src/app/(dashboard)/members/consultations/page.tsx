@@ -108,47 +108,33 @@ export default function ConsultationLogsPage() {
                 />
             </Paper>
 
-            {/* Timeline Content */}
-            <Box pos="relative" mih={200}>
-                <LoadingOverlay visible={isLoading || isRefetching} zIndex={1000} overlayProps={{ radius: "sm", blur: 2 }} />
-
-                {!selectedMemberId ? (
-                    <Center h={200} bg="gray.0" style={{ borderRadius: 8 }}>
-                        <Text c="dimmed">회원을 선택하면 상담 이력이 표시됩니다.</Text>
-                    </Center>
-                ) : logs.length === 0 ? (
-                    <Center h={200} bg="gray.0" style={{ borderRadius: 8 }}>
-                        <Text c="dimmed">등록된 상담 기록이 없습니다.</Text>
-                    </Center>
-                ) : (
-                    <Timeline active={logs.length} bulletSize={24} lineWidth={2}>
-                        {logs.map((log) => (
-                            <Timeline.Item
-                                key={log.id}
-                                bullet={<Avatar size={24} radius="xl" color="indigo" />}
-                                title={
-                                    <Group gap="xs">
-                                        <Text fw={600} size="sm">{getMemberName(log.membershipId)} 회원님 (ID: {log.membershipId})</Text>
-                                        <Badge size="sm" variant="light" color="gray">{getCategoryLabel(log.category)}</Badge>
-                                    </Group>
-                                }
-                            >
-                                <Text c="dimmed" size="xs" mt={4}>
-                                    {dayjs(log.consultedAt).format('YYYY-MM-DD HH:mm')}
-                                </Text>
-                                <Card withBorder radius="md" mt="sm" p="sm" bg="gray.0">
-                                    <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{log.content}</Text>
-                                    <Group gap={4} mt="sm">
-                                        {log.tags.map(tag => (
-                                            <Badge key={tag} size="sm" variant="dot" color="blue">{tag}</Badge>
-                                        ))}
-                                    </Group>
-                                </Card>
-                            </Timeline.Item>
-                        ))}
-                    </Timeline>
-                )}
-            </Box>
+            {/* Timeline */}
+            <Timeline active={filteredLogs.length} bulletSize={24} lineWidth={2}>
+                {filteredLogs.map((log) => (
+                    <Timeline.Item
+                        key={log.id}
+                        bullet={<Avatar size={24} radius="xl" color="indigo" />}
+                        title={
+                            <Group gap="xs">
+                                <Text fw={600} size="sm">{getMemberName(log.memberId)} 회원님</Text>
+                                <Text size="xs" c="dimmed">• {log.instructorName}</Text>
+                            </Group>
+                        }
+                    >
+                        <Text c="dimmed" size="xs" mt={4}>
+                            {dayjs(log.date).format('YYYY-MM-DD HH:mm')}
+                        </Text>
+                        <Card withBorder radius="md" mt="sm" p="sm" bg="gray.0">
+                            <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{log.content}</Text>
+                            <Group gap={4} mt="sm">
+                                {log.tags.map(tag => (
+                                    <Badge key={tag} size="sm" variant="dot" color="blue">{tag}</Badge>
+                                ))}
+                            </Group>
+                        </Card>
+                    </Timeline.Item>
+                ))}
+            </Timeline>
 
             {/* New Log Modal */}
             <Modal opened={opened} onClose={close} title="새 상담 기록 작성" size="lg">

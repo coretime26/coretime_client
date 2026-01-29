@@ -7,19 +7,24 @@ import {
     Tabs,
     Text,
     Stack,
-    Group,
+    Tooltip,
     Modal,
-    Button,
-    TextInput,
     Textarea,
-    Alert,
-    LoadingOverlay
+    Checkbox,
+    Menu,
+    Loader,
+    Center,
+    rem
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
     IconUserCheck,
-    IconSettings,
-    IconAlertTriangle
+    IconUserX,
+    IconUserPause,
+    IconUserOff,
+    IconDotsVertical,
+    IconEye,
+    IconBuilding
 } from '@tabler/icons-react';
 import { useActiveInstructors, usePendingInstructors, authApi, InstructorDto } from '@/lib/api';
 import { notifications } from '@mantine/notifications';
@@ -99,73 +104,51 @@ export default function InstructorManagementPage() {
         }
     });
 
-    const registerMutation = useMutation({
-        mutationFn: (data: any) => authApi.registerInstructor(data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['instructors'] });
-            notifications.show({
-                title: '등록 완료',
-                message: '강사가 성공적으로 등록되었습니다.',
-                color: 'green'
-            });
-        },
-        onError: (error: any) => {
-            notifications.show({
-                title: '오류',
-                message: error.response?.data?.error?.message || '강사 등록 중 오류가 발생했습니다',
-                color: 'red'
-            });
+    const openActionModal = (type: ActionType, instructor: InstructorDto) => {
+        setActionModal({ opened: true, type, instructor });
+        setRejectionReason('');
+        setConfirmWithdraw(false);
+    };
+
+    const closeModal = () => {
+        setActionModal({ opened: false, type: null, instructor: null });
+        setRejectionReason('');
+        setConfirmWithdraw(false);
+    };
+
+    const handleAction = () => {
+        if (!actionModal.instructor) return;
+
+        switch (actionModal.type) {
+            case 'approve':
+                approveMutation.mutate({ membershipId: actionModal.instructor.membershipId, isApproved: true });
+                break;
+            case 'reject':
+                approveMutation.mutate({ membershipId: actionModal.instructor.membershipId, isApproved: false });
+                break;
+            case 'suspend':
+                statusMutation.mutate({ membershipId: actionModal.instructor.membershipId, status: 'INACTIVE' });
+                break;
+            case 'withdraw':
+                statusMutation.mutate({ membershipId: actionModal.instructor.membershipId, status: 'WITHDRAWN' });
+                break;
         }
-    });
-
-    // Handlers
-    const handleAction = (type: 'suspend' | 'withdraw' | 'activate', instructor: InstructorDto) => {
-        setSelectedInstructor(instructor);
-        if (type === 'suspend') {
-            openSuspend();
-        } else if (type === 'withdraw') {
-            openWithdraw();
-        } else if (type === 'activate') {
-            statusMutation.mutate({ membershipId: instructor.membershipId, status: 'ACTIVE' });
-        }
     };
 
-    const handleEdit = (instructor: InstructorDto) => {
-        setSelectedInstructor(instructor);
-        setEditForm({
-            name: instructor.name,
-            phone: instructor.phone,
-            memo: instructor.memo || ''
-        });
-        openEdit();
+    // Filter instructors by search query
+    const filterInstructors = (instructors: InstructorDto[]) => {
+        if (!searchQuery) return instructors;
+        const query = searchQuery.toLowerCase();
+        return instructors.filter(
+            (i) =>
+                i.name.toLowerCase().includes(query) ||
+                i.phone.toLowerCase().includes(query) ||
+                i.email?.toLowerCase().includes(query)
+        );
     };
 
-    const confirmSuspend = () => {
-        if (!selectedInstructor) return;
-        statusMutation.mutate({ membershipId: selectedInstructor.membershipId, status: 'INACTIVE' }, {
-            onSuccess: () => closeSuspend()
-        });
-    };
-
-    const confirmWithdraw = () => {
-        if (!selectedInstructor) return;
-        statusMutation.mutate({ membershipId: selectedInstructor.membershipId, status: 'WITHDRAWN' }, {
-            onSuccess: () => closeWithdraw()
-        });
-    };
-
-    const saveEdit = () => {
-        // TODO: Implement API for updating instructor info
-        notifications.show({
-            title: '준비 중',
-            message: '강사 정보 수정 기능은 아직 API가 연동되지 않았습니다.',
-            color: 'orange'
-        });
-        closeEdit();
-    };
-
-    // Determine View Mode
-    const isManagementView = activeTab === 'management';
+    const filteredActive = filterInstructors(activeInstructors);
+    const filteredPending = filterInstructors(pendingInstructors);
 
     return (
         <Container size="xl" py="xl">
@@ -183,84 +166,483 @@ export default function InstructorManagementPage() {
                     </div>
                 </Group>
 
-                {isManagementView ? (
-                    <InstructorManagement
-                        pendingInstructors={pendingInstructors}
-                        isLoadingPending={isLoadingPending}
-                        onRegister={(data) => registerMutation.mutate(data)}
-                        isRegistering={registerMutation.isPending}
-                        onApprove={(instructor) => approveMutation.mutate({ membershipId: instructor.membershipId, isApproved: true })}
-                        onReject={(instructor) => approveMutation.mutate({ membershipId: instructor.membershipId, isApproved: false })}
-                    />
-                ) : (
-                    <InstructorList
-                        instructors={activeInstructors}
-                        isLoading={isLoadingActive}
-                        onAction={handleAction}
-                        onEdit={handleEdit}
-                    />
-                )}
+                {/* Tabs */}
+                <Tabs value={activeTab} onChange={setActiveTab}>
+                    <Tabs.List>
+                        <Tabs.Tab value="active" leftSection={<IconUserCheck size={16} />}>
+                            활성 강사
+                            {filteredActive.length > 0 && (
+                                <Badge size="sm" circle ml={8}>{filteredActive.length}</Badge>
+                            )}
+                        </Tabs.Tab>
+                        <Tabs.Tab value="pending" leftSection={<IconUserX size={16} />}>
+                            승인 대기
+                            {filteredPending.length > 0 && (
+                                <Badge size="sm" color="orange" circle ml={8}>{filteredPending.length}</Badge>
+                            )}
+                        </Tabs.Tab>
+                    </Tabs.List>
 
-                {/* --- Modals --- */}
+                    {/* Active Instructors Tab */}
+                    <Tabs.Panel value="active" pt="md">
+                        {isLoadingActive ? (
+                            <Center h={300}><Loader /></Center>
+                        ) : filteredActive.length === 0 ? (
+                            <Center h={300}>
+                                <Stack align="center" gap="xs">
+                                    <IconBuilding size={48} stroke={1.5} color="gray" />
+                                    <Text c="dimmed">활성 강사가 없습니다</Text>
+                                </Stack>
+                            </Center>
+                        ) : viewMode === 'table' ? (
+                            <InstructorTable
+                                instructors={filteredActive}
+                                onAction={openActionModal}
+                                isPending={false}
+                            />
+                        ) : (
+                            <InstructorCards
+                                instructors={filteredActive}
+                                onAction={openActionModal}
+                                isPending={false}
+                            />
+                        )}
+                    </Tabs.Panel>
 
-                {/* 1. Edit Modal */}
-                <Modal opened={editOpened} onClose={closeEdit} title="강사 정보 수정">
-                    <Stack>
-                        <TextInput
-                            label="이름"
-                            value={editForm.name}
-                            onChange={(e) => setEditForm({ ...editForm, name: e.currentTarget.value })}
-                        />
-                        <TextInput
-                            label="연락처"
-                            value={editForm.phone}
-                            onChange={(e) => setEditForm({ ...editForm, phone: e.currentTarget.value })}
-                        />
-                        <Textarea
-                            label="메모"
-                            value={editForm.memo}
-                            onChange={(e) => setEditForm({ ...editForm, memo: e.currentTarget.value })}
-                        />
-                        <Group justify="flex-end" mt="md">
-                            <Button variant="default" onClick={closeEdit}>취소</Button>
-                            <Button onClick={saveEdit}>저장</Button>
-                        </Group>
-                    </Stack>
-                </Modal>
-
-                {/* 2. Suspend Modal */}
-                <Modal opened={suspendOpened} onClose={closeSuspend} title="강사 일시정지">
-                    <Stack>
-                        <Text size="sm">
-                            <Text span fw={700}>{selectedInstructor?.name}</Text> 강사의 계정을 일시정지 상태로 변경하시겠습니까?
-                            <br />
-                            일시정지 중에는 시스템 접속이 제한됩니다.
-                        </Text>
-                        <Group justify="flex-end" mt="md">
-                            <Button variant="default" onClick={closeSuspend}>취소</Button>
-                            <Button color="orange" onClick={confirmSuspend} loading={statusMutation.isPending}>일시정지 처리</Button>
-                        </Group>
-                    </Stack>
-                </Modal>
-
-                {/* 3. Withdraw Modal */}
-                <Modal opened={withdrawOpened} onClose={closeWithdraw} title="강사 퇴사 처리" color="red">
-                    <Stack>
-                        <Alert variant="light" color="red" icon={<IconAlertTriangle size={16} />}>
-                            주의: 퇴사 처리는 신중하게 진행해야 합니다.
-                        </Alert>
-                        <Text size="sm">
-                            <Text span fw={700}>{selectedInstructor?.name}</Text> 강사를 퇴사 처리하시겠습니까?
-                            <br />
-                            퇴사 처리 시 해당 강사는 더 이상 목록에 표시되지 않거나 비활성화되며, 시스템 접속이 영구적으로 차단됩니다.
-                        </Text>
-                        <Group justify="flex-end" mt="md">
-                            <Button variant="default" onClick={closeWithdraw}>취소</Button>
-                            <Button color="red" onClick={confirmWithdraw} loading={statusMutation.isPending}>퇴사 처리</Button>
-                        </Group>
-                    </Stack>
-                </Modal>
+                    {/* Pending Instructors Tab */}
+                    <Tabs.Panel value="pending" pt="md">
+                        {isLoadingPending ? (
+                            <Center h={300}><Loader /></Center>
+                        ) : filteredPending.length === 0 ? (
+                            <Center h={300}>
+                                <Stack align="center" gap="xs">
+                                    <IconUserCheck size={48} stroke={1.5} color="gray" />
+                                    <Text c="dimmed">대기 중인 요청이 없습니다</Text>
+                                </Stack>
+                            </Center>
+                        ) : viewMode === 'table' ? (
+                            <InstructorTable
+                                instructors={filteredPending}
+                                onAction={openActionModal}
+                                isPending={true}
+                            />
+                        ) : (
+                            <InstructorCards
+                                instructors={filteredPending}
+                                onAction={openActionModal}
+                                isPending={true}
+                            />
+                        )}
+                    </Tabs.Panel>
+                </Tabs>
             </Stack>
+
+            {/* Action Modals */}
+            <ActionModals
+                state={actionModal}
+                onClose={closeModal}
+                onConfirm={handleAction}
+                rejectionReason={rejectionReason}
+                setRejectionReason={setRejectionReason}
+                confirmWithdraw={confirmWithdraw}
+                setConfirmWithdraw={setConfirmWithdraw}
+                isLoading={approveMutation.isPending || statusMutation.isPending}
+            />
         </Container>
     );
+}
+
+// Table View Component
+function InstructorTable({
+    instructors,
+    onAction,
+    isPending
+}: {
+    instructors: InstructorDto[];
+    onAction: (type: ActionType, instructor: InstructorDto) => void;
+    isPending: boolean;
+}) {
+    return (
+        <Table.ScrollContainer minWidth={700}>
+            <Table striped highlightOnHover>
+                <Table.Thead>
+                    <Table.Tr>
+                        <Table.Th>강사</Table.Th>
+                        <Table.Th>연락처</Table.Th>
+                        {!isPending && <Table.Th>상태</Table.Th>}
+                        <Table.Th>{isPending ? '신청일' : '가입일'}</Table.Th>
+                        <Table.Th>작업</Table.Th>
+                    </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                    {instructors.map((instructor) => (
+                        <Table.Tr key={instructor.membershipId}>
+                            <Table.Td>
+                                <Group gap="sm">
+                                    <Avatar
+                                        src={instructor.profileImageUrl || undefined}
+                                        radius="xl"
+                                        size="md"
+                                    >
+                                        {instructor.name.charAt(0)}
+                                    </Avatar>
+                                    <div>
+                                        <Text fw={500}>{instructor.name}</Text>
+                                        <Text size="xs" c="dimmed">{instructor.email}</Text>
+                                    </div>
+                                </Group>
+                            </Table.Td>
+                            <Table.Td>{instructor.phone}</Table.Td>
+                            {!isPending && (
+                                <Table.Td>
+                                    <Badge color={statusConfig[instructor.status as keyof typeof statusConfig]?.color}>
+                                        {statusConfig[instructor.status as keyof typeof statusConfig]?.label}
+                                    </Badge>
+                                </Table.Td>
+                            )}
+                            <Table.Td>
+                                <Text size="sm">
+                                    {instructor.joinedAt
+                                        ? formatDistance(new Date(instructor.joinedAt), new Date(), {
+                                            addSuffix: true,
+                                            locale: ko
+                                        })
+                                        : '-'}
+                                </Text>
+                            </Table.Td>
+                            <Table.Td>
+                                <InstructorActions
+                                    instructor={instructor}
+                                    isPending={isPending}
+                                    onAction={onAction}
+                                />
+                            </Table.Td>
+                        </Table.Tr>
+                    ))}
+                </Table.Tbody>
+            </Table>
+        </Table.ScrollContainer>
+    );
+}
+
+// Card View Component
+function InstructorCards({
+    instructors,
+    onAction,
+    isPending
+}: {
+    instructors: InstructorDto[];
+    onAction: (type: ActionType, instructor: InstructorDto) => void;
+    isPending: boolean;
+}) {
+    return (
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+            {instructors.map((instructor) => (
+                <Card key={instructor.membershipId} withBorder padding="lg" radius="md">
+                    <Stack gap="md">
+                        <Group>
+                            <Avatar
+                                src={instructor.profileImageUrl || undefined}
+                                radius="xl"
+                                size="lg"
+                            >
+                                {instructor.name.charAt(0)}
+                            </Avatar>
+                            <div style={{ flex: 1 }}>
+                                <Text fw={600}>{instructor.name}</Text>
+                                <Text size="sm" c="dimmed">{instructor.phone}</Text>
+                            </div>
+                            {!isPending && (
+                                <Badge color={statusConfig[instructor.status as keyof typeof statusConfig]?.color}>
+                                    {statusConfig[instructor.status as keyof typeof statusConfig]?.label}
+                                </Badge>
+                            )}
+                        </Group>
+
+                        <div>
+                            <Text size="xs" c="dimmed" mb={4}>
+                                {isPending ? '신청일' : '가입일'}
+                            </Text>
+                            <Text size="sm">
+                                {instructor.joinedAt
+                                    ? formatDistance(new Date(instructor.joinedAt), new Date(), {
+                                        addSuffix: true,
+                                        locale: ko
+                                    })
+                                    : '-'}
+                            </Text>
+                        </div>
+
+                        <InstructorActions
+                            instructor={instructor}
+                            isPending={isPending}
+                            onAction={onAction}
+                            isCard
+                        />
+                    </Stack>
+                </Card>
+            ))}
+        </SimpleGrid>
+    );
+}
+
+// Actions Component (Dropdown or Buttons)
+function InstructorActions({
+    instructor,
+    isPending,
+    onAction,
+    isCard = false
+}: {
+    instructor: InstructorDto;
+    isPending: boolean;
+    onAction: (type: ActionType, instructor: InstructorDto) => void;
+    isCard?: boolean;
+}) {
+    if (isPending) {
+        return (
+            <Group gap="xs" wrap="nowrap">
+                <Button
+                    size="xs"
+                    color="green"
+                    leftSection={<IconUserCheck size={14} />}
+                    onClick={() => onAction('approve', instructor)}
+                    fullWidth={isCard}
+                >
+                    승인
+                </Button>
+                <Button
+                    size="xs"
+                    color="red"
+                    variant="light"
+                    leftSection={<IconUserX size={14} />}
+                    onClick={() => onAction('reject', instructor)}
+                    fullWidth={isCard}
+                >
+                    거절
+                </Button>
+            </Group>
+        );
+    }
+
+    if (isCard) {
+        return (
+            <Group gap="xs">
+                <Button
+                    size="xs"
+                    variant="light"
+                    color="orange"
+                    leftSection={<IconUserPause size={14} />}
+                    onClick={() => onAction('suspend', instructor)}
+                    fullWidth
+                    disabled={instructor.status === 'INACTIVE'}
+                >
+                    일시정지
+                </Button>
+                <Button
+                    size="xs"
+                    variant="light"
+                    color="red"
+                    leftSection={<IconUserOff size={14} />}
+                    onClick={() => onAction('withdraw', instructor)}
+                    fullWidth
+                    disabled={instructor.status === 'WITHDRAWN'}
+                >
+                    퇴사처리
+                </Button>
+            </Group>
+        );
+    }
+
+    return (
+        <Menu position="bottom-end" withArrow>
+            <Menu.Target>
+                <ActionIcon variant="subtle">
+                    <IconDotsVertical size={16} />
+                </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+                <Menu.Item
+                    leftSection={<IconUserPause size={14} />}
+                    onClick={() => onAction('suspend', instructor)}
+                    disabled={instructor.status === 'INACTIVE'}
+                >
+                    일시정지
+                </Menu.Item>
+                <Menu.Item
+                    leftSection={<IconUserOff size={14} />}
+                    color="red"
+                    onClick={() => onAction('withdraw', instructor)}
+                    disabled={instructor.status === 'WITHDRAWN'}
+                >
+                    퇴사처리
+                </Menu.Item>
+            </Menu.Dropdown>
+        </Menu>
+    );
+}
+
+// Action Modals Component
+function ActionModals({
+    state,
+    onClose,
+    onConfirm,
+    rejectionReason,
+    setRejectionReason,
+    confirmWithdraw,
+    setConfirmWithdraw,
+    isLoading
+}: {
+    state: ActionModalState;
+    onClose: () => void;
+    onConfirm: () => void;
+    rejectionReason: string;
+    setRejectionReason: (value: string) => void;
+    confirmWithdraw: boolean;
+    setConfirmWithdraw: (value: boolean) => void;
+    isLoading: boolean;
+}) {
+    const { opened, type, instructor } = state;
+
+    if (!instructor) return null;
+
+    switch (type) {
+        case 'approve':
+            return (
+                <Modal opened={opened} onClose={onClose} title="강사 가입 승인" centered>
+                    <Stack>
+                        <Text>다음 강사의 가입을 승인하시겠습니까?</Text>
+                        <Card withBorder>
+                            <Group>
+                                <Avatar src={instructor.profileImageUrl || undefined} radius="xl">
+                                    {instructor.name.charAt(0)}
+                                </Avatar>
+                                <div>
+                                    <Text fw={600}>{instructor.name}</Text>
+                                    <Text size="sm" c="dimmed">{instructor.phone}</Text>
+                                </div>
+                            </Group>
+                        </Card>
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="subtle" onClick={onClose} disabled={isLoading}>
+                                취소
+                            </Button>
+                            <Button onClick={onConfirm} loading={isLoading}>
+                                승인하기
+                            </Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+            );
+
+        case 'reject':
+            return (
+                <Modal opened={opened} onClose={onClose} title="⚠️ 가입 요청 거절" centered>
+                    <Stack>
+                        <Text>거절 사유를 입력해주세요</Text>
+                        <Textarea
+                            placeholder="거절 사유 (선택사항)"
+                            value={rejectionReason}
+                            onChange={(e) => setRejectionReason(e.currentTarget.value)}
+                            minRows={3}
+                        />
+                        <Card withBorder bg="red.0">
+                            <Group>
+                                <Avatar src={instructor.profileImageUrl || undefined} radius="xl">
+                                    {instructor.name.charAt(0)}
+                                </Avatar>
+                                <div>
+                                    <Text fw={600}>{instructor.name}</Text>
+                                    <Text size="sm" c="dimmed">{instructor.phone}</Text>
+                                </div>
+                            </Group>
+                        </Card>
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="subtle" onClick={onClose} disabled={isLoading}>
+                                취소
+                            </Button>
+                            <Button color="red" onClick={onConfirm} loading={isLoading}>
+                                거절하기
+                            </Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+            );
+
+        case 'suspend':
+            return (
+                <Modal opened={opened} onClose={onClose} title="강사 일시정지" centered>
+                    <Stack>
+                        <Text>강사를 일시정지 상태로 변경하시겠습니까?</Text>
+                        <Textarea
+                            label="정지 사유 (선택사항)"
+                            placeholder="정지 사유를 입력하세요"
+                            minRows={3}
+                        />
+                        <Card withBorder>
+                            <Group>
+                                <Avatar src={instructor.profileImageUrl || undefined} radius="xl">
+                                    {instructor.name.charAt(0)}
+                                </Avatar>
+                                <div>
+                                    <Text fw={600}>{instructor.name}</Text>
+                                    <Text size="sm" c="dimmed">{instructor.phone}</Text>
+                                </div>
+                            </Group>
+                        </Card>
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="subtle" onClick={onClose} disabled={isLoading}>
+                                취소
+                            </Button>
+                            <Button color="orange" onClick={onConfirm} loading={isLoading}>
+                                일시정지
+                            </Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+            );
+
+        case 'withdraw':
+            return (
+                <Modal opened={opened} onClose={onClose} title="⚠️ 강사 퇴사 처리" centered>
+                    <Stack>
+                        <Text c="red" fw={600}>퇴사 처리 시 복구할 수 없습니다</Text>
+                        <Text size="sm" c="dimmed">
+                            퇴사 처리된 강사는 더 이상 시스템에 접근할 수 없으며, 이 작업은 되돌릴 수 없습니다.
+                        </Text>
+                        <Card withBorder bg="red.0">
+                            <Group>
+                                <Avatar src={instructor.profileImageUrl || undefined} radius="xl">
+                                    {instructor.name.charAt(0)}
+                                </Avatar>
+                                <div>
+                                    <Text fw={600}>{instructor.name}</Text>
+                                    <Text size="sm" c="dimmed">{instructor.phone}</Text>
+                                </div>
+                            </Group>
+                        </Card>
+                        <Checkbox
+                            label="위 내용을 확인했으며 퇴사 처리를 진행합니다"
+                            checked={confirmWithdraw}
+                            onChange={(e) => setConfirmWithdraw(e.currentTarget.checked)}
+                        />
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="subtle" onClick={onClose} disabled={isLoading}>
+                                취소
+                            </Button>
+                            <Button
+                                color="red"
+                                onClick={onConfirm}
+                                disabled={!confirmWithdraw}
+                                loading={isLoading}
+                            >
+                                퇴사처리
+                            </Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+            );
+
+        default:
+            return null;
+    }
 }

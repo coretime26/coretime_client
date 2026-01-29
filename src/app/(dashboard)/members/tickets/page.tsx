@@ -36,7 +36,7 @@ export default function TicketManagementPage() {
 
     const queryClient = useQueryClient();
     const { data: tickets = [], isLoading } = useMemberTickets();
-    const { data: members = [] } = useMembers({ status: ['ACTIVE', 'INACTIVE', 'WITHDRAWN', 'PENDING_APPROVAL'] }); // Fetch all for name resolution
+    const { data: members = [] } = useMembersList();
     // Removed general payments hook
 
     const [registerOpened, { open: openRegister, close: closeRegister }] = useDisclosure(false);
@@ -90,15 +90,13 @@ export default function TicketManagementPage() {
                 if (t.status !== 'PAUSED') return false;
             }
 
-            const nameMatch = (t.memberName || getMemberName(t.memberId)).includes(search);
-            if (search && !nameMatch) return false;
+            const memberName = getMemberName(t.membershipId);
+            if (search && !memberName.includes(search)) return false;
 
             return true;
         }).sort((a: MemberTicketResult, b: MemberTicketResult) => {
             if (sortOrder === 'NAME_ASC') {
-                const nameA = a.memberName || getMemberName(a.memberId);
-                const nameB = b.memberName || getMemberName(b.memberId);
-                return nameA.localeCompare(nameB);
+                return getMemberName(a.membershipId).localeCompare(getMemberName(b.membershipId));
             } else if (sortOrder === 'REG_DESC') {
                 return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
             } else if (sortOrder === 'REMAINING_ASC') {
@@ -368,7 +366,7 @@ export default function TicketManagementPage() {
                             return (
                                 <Table.Tr key={t.id}>
                                     <Table.Td>
-                                        <Text fw={500} size="sm">{t.memberName || getMemberName(t.memberId)}</Text>
+                                        <Text fw={500} size="sm">{getMemberName(t.membershipId)}</Text>
                                     </Table.Td>
                                     <Table.Td>
                                         <Group gap="xs">
