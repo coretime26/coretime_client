@@ -7,11 +7,19 @@ import {
     Tabs,
     Text,
     Stack,
-    Group
+    Group,
+    Modal,
+    Button,
+    TextInput,
+    Textarea,
+    Alert,
+    LoadingOverlay
 } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import {
     IconUserCheck,
-    IconSettings
+    IconSettings,
+    IconAlertTriangle
 } from '@tabler/icons-react';
 import { useActiveInstructors, usePendingInstructors, authApi, InstructorDto } from '@/lib/api';
 import { notifications } from '@mantine/notifications';
@@ -40,6 +48,15 @@ export default function InstructorManagementPage() {
     // Queries
     const { data: activeInstructors = [], isLoading: isLoadingActive } = useActiveInstructors();
     const { data: pendingInstructors = [], isLoading: isLoadingPending } = usePendingInstructors();
+
+    // Modal States
+    const [selectedInstructor, setSelectedInstructor] = useState<InstructorDto | null>(null);
+    const [editOpened, { open: openEdit, close: closeEdit }] = useDisclosure(false);
+    const [suspendOpened, { open: openSuspend, close: closeSuspend }] = useDisclosure(false);
+    const [withdrawOpened, { open: openWithdraw, close: closeWithdraw }] = useDisclosure(false);
+
+    // Edit Form State (Mock for now as API is missing)
+    const [editForm, setEditForm] = useState({ name: '', phone: '', memo: '' });
 
     // Mutations
     const approveMutation = useMutation({
@@ -103,17 +120,48 @@ export default function InstructorManagementPage() {
 
     // Handlers
     const handleAction = (type: 'suspend' | 'withdraw' | 'activate', instructor: InstructorDto) => {
+        setSelectedInstructor(instructor);
         if (type === 'suspend') {
-            if (confirm(`${instructor.name} 강사를 일시정지 하시겠습니까?`)) {
-                statusMutation.mutate({ membershipId: instructor.membershipId, status: 'INACTIVE' });
-            }
+            openSuspend();
         } else if (type === 'withdraw') {
-            if (confirm(`[주의] ${instructor.name} 강사를 퇴사 처리하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
-                statusMutation.mutate({ membershipId: instructor.membershipId, status: 'WITHDRAWN' });
-            }
+            openWithdraw();
         } else if (type === 'activate') {
             statusMutation.mutate({ membershipId: instructor.membershipId, status: 'ACTIVE' });
         }
+    };
+
+    const handleEdit = (instructor: InstructorDto) => {
+        setSelectedInstructor(instructor);
+        setEditForm({
+            name: instructor.name,
+            phone: instructor.phone,
+            memo: instructor.memo || ''
+        });
+        openEdit();
+    };
+
+    const confirmSuspend = () => {
+        if (!selectedInstructor) return;
+        statusMutation.mutate({ membershipId: selectedInstructor.membershipId, status: 'INACTIVE' }, {
+            onSuccess: () => closeSuspend()
+        });
+    };
+
+    const confirmWithdraw = () => {
+        if (!selectedInstructor) return;
+        statusMutation.mutate({ membershipId: selectedInstructor.membershipId, status: 'WITHDRAWN' }, {
+            onSuccess: () => closeWithdraw()
+        });
+    };
+
+    const saveEdit = () => {
+        // TODO: Implement API for updating instructor info
+        notifications.show({
+            title: '준비 중',
+            message: '강사 정보 수정 기능은 아직 API가 연동되지 않았습니다.',
+            color: 'orange'
+        });
+        closeEdit();
     };
 
     // Determine View Mode
@@ -149,8 +197,69 @@ export default function InstructorManagementPage() {
                         instructors={activeInstructors}
                         isLoading={isLoadingActive}
                         onAction={handleAction}
+                        onEdit={handleEdit}
                     />
                 )}
+
+                {/* --- Modals --- */}
+
+                {/* 1. Edit Modal */}
+                <Modal opened={editOpened} onClose={closeEdit} title="강사 정보 수정">
+                    <Stack>
+                        <TextInput
+                            label="이름"
+                            value={editForm.name}
+                            onChange={(e) => setEditForm({ ...editForm, name: e.currentTarget.value })}
+                        />
+                        <TextInput
+                            label="연락처"
+                            value={editForm.phone}
+                            onChange={(e) => setEditForm({ ...editForm, phone: e.currentTarget.value })}
+                        />
+                        <Textarea
+                            label="메모"
+                            value={editForm.memo}
+                            onChange={(e) => setEditForm({ ...editForm, memo: e.currentTarget.value })}
+                        />
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="default" onClick={closeEdit}>취소</Button>
+                            <Button onClick={saveEdit}>저장</Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+
+                {/* 2. Suspend Modal */}
+                <Modal opened={suspendOpened} onClose={closeSuspend} title="강사 일시정지">
+                    <Stack>
+                        <Text size="sm">
+                            <Text span fw={700}>{selectedInstructor?.name}</Text> 강사의 계정을 일시정지 상태로 변경하시겠습니까?
+                            <br />
+                            일시정지 중에는 시스템 접속이 제한됩니다.
+                        </Text>
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="default" onClick={closeSuspend}>취소</Button>
+                            <Button color="orange" onClick={confirmSuspend} loading={statusMutation.isPending}>일시정지 처리</Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+
+                {/* 3. Withdraw Modal */}
+                <Modal opened={withdrawOpened} onClose={closeWithdraw} title="강사 퇴사 처리" color="red">
+                    <Stack>
+                        <Alert variant="light" color="red" icon={<IconAlertTriangle size={16} />}>
+                            주의: 퇴사 처리는 신중하게 진행해야 합니다.
+                        </Alert>
+                        <Text size="sm">
+                            <Text span fw={700}>{selectedInstructor?.name}</Text> 강사를 퇴사 처리하시겠습니까?
+                            <br />
+                            퇴사 처리 시 해당 강사는 더 이상 목록에 표시되지 않거나 비활성화되며, 시스템 접속이 영구적으로 차단됩니다.
+                        </Text>
+                        <Group justify="flex-end" mt="md">
+                            <Button variant="default" onClick={closeWithdraw}>취소</Button>
+                            <Button color="red" onClick={confirmWithdraw} loading={statusMutation.isPending}>퇴사 처리</Button>
+                        </Group>
+                    </Stack>
+                </Modal>
             </Stack>
         </Container>
     );

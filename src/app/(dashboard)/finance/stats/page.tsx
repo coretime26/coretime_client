@@ -1,17 +1,18 @@
 'use client';
 
 import {
-    Title, Text, Container, Grid, Paper, Group,
+    Title, Text, Container, Grid, Paper, Group, ActionIcon,
     ThemeIcon, Table, Badge, Stack, SegmentedControl, Skeleton, Center, Pagination
 } from '@mantine/core';
 import {
     IconTrendingUp, IconTrendingDown, IconCreditCard,
-    IconCalendar, IconArrowUpRight, IconArrowDownRight, IconCoin, IconAlertCircle
+    IconCalendar, IconArrowUpRight, IconArrowDownRight, IconCoin, IconAlertCircle, IconRefresh
 } from '@tabler/icons-react';
 import { AreaChart, DonutChart } from '@mantine/charts';
 import { MonthPickerInput } from '@mantine/dates';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import dayjs from 'dayjs';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     useFinanceStatsSummary,
     useFinanceStatsTrend,
@@ -36,8 +37,13 @@ const PAYMENT_METHOD_COLORS: Record<PaymentMethod, string> = {
 };
 
 export default function FinanceStatsPage() {
-    const [dateValue, setDateValue] = useState<Date | null>(new Date());
+    const queryClient = useQueryClient();
+    const [dateValue, setDateValue] = useState<Date | null>(null);
     const [page, setPage] = useState(1);
+
+    useEffect(() => {
+        setDateValue(new Date());
+    }, []);
 
     // Calculate Date Range
     const dateRange = useMemo(() => {
@@ -87,6 +93,16 @@ export default function FinanceStatsPage() {
                     <Text c="dimmed" size="sm">기간별 매출 현황 및 추이를 확인합니다.</Text>
                 </div>
                 <Group>
+                    <ActionIcon
+                        variant="light"
+                        size="lg"
+                        onClick={() => {
+                            notifications.show({ title: '새로고침', message: '데이터를 최신화합니다.', color: 'blue', icon: <IconRefresh size={16} /> });
+                            queryClient.invalidateQueries({ queryKey: ['finance'] });
+                        }}
+                    >
+                        <IconRefresh size={18} />
+                    </ActionIcon>
                     <MonthPickerInput
                         placeholder="기간 선택"
                         leftSection={<IconCalendar size={16} />}

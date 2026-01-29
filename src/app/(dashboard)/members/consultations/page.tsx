@@ -128,7 +128,7 @@ export default function ConsultationLogsPage() {
                                 bullet={<Avatar size={24} radius="xl" color="indigo" />}
                                 title={
                                     <Group gap="xs">
-                                        <Text fw={600} size="sm">{getMemberName(log.membershipId)} 회원님</Text>
+                                        <Text fw={600} size="sm">{getMemberName(log.membershipId)} 회원님 (ID: {log.membershipId})</Text>
                                         <Badge size="sm" variant="light" color="gray">{getCategoryLabel(log.category)}</Badge>
                                     </Group>
                                 }

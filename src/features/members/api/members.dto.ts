@@ -33,6 +33,7 @@ export interface RegisterMemberCommand {
 export interface MemberTicketResult {
     id: number | string;
     memberId: number | string;
+    memberName: string;
     ticketName: string;
     remainingCount: number;
     totalCount: number;

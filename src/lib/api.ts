@@ -151,6 +151,7 @@ export type TicketStatus = 'ACTIVE' | 'PAUSED' | 'EXPIRED' | 'EXHAUSTED' | 'DELE
 export interface MemberTicketResult {
     id: string;
     membershipId: string;
+    name: string;            // Added Member Name
     ticketName: string;
     totalCount: number;
     remainingCount: number;

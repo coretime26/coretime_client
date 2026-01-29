@@ -37,6 +37,7 @@ interface InstructorListProps {
     instructors: InstructorDto[];
     isLoading: boolean;
     onAction: (type: 'suspend' | 'withdraw' | 'activate', instructor: InstructorDto) => void;
+    onEdit: (instructor: InstructorDto) => void;
 }
 
 const statusConfig = {
@@ -46,7 +47,7 @@ const statusConfig = {
     WITHDRAWN: { color: 'red', label: '퇴사' }
 };
 
-export default function InstructorList({ instructors, isLoading, onAction }: InstructorListProps) {
+export default function InstructorList({ instructors, isLoading, onAction, onEdit }: InstructorListProps) {
     const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string | null>('ALL');
@@ -110,9 +111,9 @@ export default function InstructorList({ instructors, isLoading, onAction }: Ins
                     </Stack>
                 </Center>
             ) : viewMode === 'table' ? (
-                <InstructorTable instructors={filteredInstructors} onAction={onAction} />
+                <InstructorTable instructors={filteredInstructors} onAction={onAction} onEdit={onEdit} />
             ) : (
-                <InstructorCards instructors={filteredInstructors} onAction={onAction} />
+                <InstructorCards instructors={filteredInstructors} onAction={onAction} onEdit={onEdit} />
             )}
         </Stack>
     );
@@ -120,7 +121,7 @@ export default function InstructorList({ instructors, isLoading, onAction }: Ins
 
 // --- Sub Components ---
 
-function InstructorTable({ instructors, onAction }: { instructors: InstructorDto[], onAction: any }) {
+function InstructorTable({ instructors, onAction, onEdit }: { instructors: InstructorDto[], onAction: any, onEdit: any }) {
     return (
         <Card withBorder radius="md" p={0}>
             <Table striped highlightOnHover>
@@ -164,7 +165,7 @@ function InstructorTable({ instructors, onAction }: { instructors: InstructorDto
                                 </Text>
                             </Table.Td>
                             <Table.Td>
-                                <InstructorActions instructor={instructor} onAction={onAction} />
+                                <InstructorActions instructor={instructor} onAction={onAction} onEdit={onEdit} />
                             </Table.Td>
                         </Table.Tr>
                     ))}
@@ -174,7 +175,7 @@ function InstructorTable({ instructors, onAction }: { instructors: InstructorDto
     );
 }
 
-function InstructorCards({ instructors, onAction }: { instructors: InstructorDto[], onAction: any }) {
+function InstructorCards({ instructors, onAction, onEdit }: { instructors: InstructorDto[], onAction: any, onEdit: any }) {
     return (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
             {instructors.map((instructor) => (
@@ -215,7 +216,7 @@ function InstructorCards({ instructors, onAction }: { instructors: InstructorDto
                             >
                                 일시정지
                             </Button>
-                            <InstructorActions instructor={instructor} onAction={onAction} isCard />
+                            <InstructorActions instructor={instructor} onAction={onAction} onEdit={onEdit} isCard />
                         </Group>
                     </Stack>
                 </Card>
@@ -224,7 +225,7 @@ function InstructorCards({ instructors, onAction }: { instructors: InstructorDto
     );
 }
 
-function InstructorActions({ instructor, onAction, isCard }: { instructor: InstructorDto, onAction: any, isCard?: boolean }) {
+function InstructorActions({ instructor, onAction, onEdit, isCard }: { instructor: InstructorDto, onAction: any, onEdit: any, isCard?: boolean }) {
     if (isCard) {
         // In card view, actions are buttons, implemented above or here if more complex
         return (
@@ -235,7 +236,7 @@ function InstructorActions({ instructor, onAction, isCard }: { instructor: Instr
                 <Menu.Dropdown>
                     <Menu.Item
                         leftSection={<IconEdit size={14} />}
-                        onClick={() => { /* Edit Implementation in future */ }}
+                        onClick={() => onEdit(instructor)}
                     >
                         정보 수정
                     </Menu.Item>
@@ -260,7 +261,7 @@ function InstructorActions({ instructor, onAction, isCard }: { instructor: Instr
             <Menu.Dropdown>
                 <Menu.Item
                     leftSection={<IconEdit size={14} />}
-                    onClick={() => { /* Edit Implementation in future */ }}
+                    onClick={() => onEdit(instructor)}
                 >
                     정보 수정
                 </Menu.Item>

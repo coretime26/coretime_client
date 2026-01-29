@@ -36,7 +36,7 @@ export default function TicketManagementPage() {
 
     const queryClient = useQueryClient();
     const { data: tickets = [], isLoading } = useMemberTickets();
-    const { data: members = [] } = useMembers(); // Use feature hook
+    const { data: members = [] } = useMembers({ status: ['ACTIVE', 'INACTIVE', 'WITHDRAWN', 'PENDING_APPROVAL'] }); // Fetch all for name resolution
     // Removed general payments hook
 
     const [registerOpened, { open: openRegister, close: closeRegister }] = useDisclosure(false);
@@ -48,9 +48,17 @@ export default function TicketManagementPage() {
         memberId: '',
         name: '1:1 PT 10회',
         totalCount: 10,
-        startDate: new Date(),
-        endDate: dayjs().add(1, 'year').toDate()
+        startDate: null as Date | null,
+        endDate: null as Date | null
     });
+
+    useEffect(() => {
+        setNewTicketData(prev => ({
+            ...prev,
+            startDate: new Date(),
+            endDate: dayjs().add(1, 'year').toDate()
+        }));
+    }, []);
 
     const [selectedPrePaidTxId, setSelectedPrePaidTxId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState<number | Date | null>(null);
@@ -82,13 +90,15 @@ export default function TicketManagementPage() {
                 if (t.status !== 'PAUSED') return false;
             }
 
-            const memberName = getMemberName(t.memberId);
-            if (search && !memberName.includes(search)) return false;
+            const nameMatch = (t.memberName || getMemberName(t.memberId)).includes(search);
+            if (search && !nameMatch) return false;
 
             return true;
         }).sort((a: MemberTicketResult, b: MemberTicketResult) => {
             if (sortOrder === 'NAME_ASC') {
-                return getMemberName(a.memberId).localeCompare(getMemberName(b.memberId));
+                const nameA = a.memberName || getMemberName(a.memberId);
+                const nameB = b.memberName || getMemberName(b.memberId);
+                return nameA.localeCompare(nameB);
             } else if (sortOrder === 'REG_DESC') {
                 return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
             } else if (sortOrder === 'REMAINING_ASC') {
@@ -358,7 +368,7 @@ export default function TicketManagementPage() {
                             return (
                                 <Table.Tr key={t.id}>
                                     <Table.Td>
-                                        <Text fw={500} size="sm">{getMemberName(t.memberId)}</Text>
+                                        <Text fw={500} size="sm">{t.memberName || getMemberName(t.memberId)}</Text>
                                     </Table.Td>
                                     <Table.Td>
                                         <Group gap="xs">
@@ -368,7 +378,7 @@ export default function TicketManagementPage() {
                                     </Table.Td>
                                     <Table.Td>
                                         <Group gap="xs" mb={4} justify="space-between">
-                                            <Text size="xs" fw={700}>{t.remainingCount}회</Text>
+                                            <Text size="xs" fw={700}>{t.remainingCount.toLocaleString()}회</Text>
                                             <Text size="xs" c="dimmed">/ {t.totalCount}회</Text>
                                         </Group>
                                         <Progress
