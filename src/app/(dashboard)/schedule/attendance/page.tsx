@@ -3,51 +3,101 @@
 import {
     Title, Text, Container, Group, Card, Badge,
     Accordion, Button, SegmentedControl, Avatar,
-    Switch, ThemeIcon, Progress, Modal, Select, Stack
+    Switch, ThemeIcon, Progress, Modal, Select, Stack, Loader, Center, TextInput, ActionIcon
 } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { useDisclosure, useDebouncedValue } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
-    IconCalendarEvent, IconClock, IconAlertTriangle, IconUserPlus
+    IconCalendarEvent, IconClock, IconAlertTriangle, IconUserPlus, IconSearch, IconX
 } from '@tabler/icons-react';
 import { useState } from 'react';
 import dayjs from 'dayjs';
 import { useSettings } from '@/context/SettingsContext';
-import { CLASSES, RESERVATIONS } from '@/features/schedule/model/mock-data';
+import { useWeeklySchedule, useReservations, useReservationMutations } from '@/features/schedule';
 import { Reservation } from '@/features/schedule';
+import { useQuery } from '@tanstack/react-query';
+import { memberApi } from '@/lib/api';
 
 export default function AttendancePage() {
-    // Correctly destructure policies and the update function from context
     const { policies, updatePolicies } = useSettings();
     const [today] = useState(new Date());
 
-    // --- Data Prep (Mock) ---
-    // In a real app, we'd fetch classes for 'today'
-    const todaysClasses = CLASSES.filter(c => dayjs(c.startTime).isSame(today, 'day'));
+    // API Hooks
+    const { data: schedule = [], isLoading: isScheduleLoading } = useWeeklySchedule(today);
+    const { data: allReservations = [], isLoading: isReservationsLoading } = useReservations();
+    const { updateAttendance, createReservationByAdmin } = useReservationMutations();
 
-    // State for local attendance updates (mimicking optimistic UI)
-    const [localReservations, setLocalReservations] = useState<Reservation[]>(RESERVATIONS);
+    // Walk-in State
+    const [walkInModalOpen, { open: openWalkIn, close: closeWalkIn }] = useDisclosure(false);
+    const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+    const [memberSearch, setMemberSearch] = useState('');
+    const [debouncedSearch] = useDebouncedValue(memberSearch, 500);
+    const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
-    // Filter reservations for relevant classes
+    // Filter for Today
+    const todaysClasses = schedule.filter(c => dayjs(c.startTime).isSame(today, 'day'));
+    const todaysReservations = allReservations.filter(r => dayjs(r.date).isSame(today, 'day'));
+
+    // ... (Stats calculation logic stays same)
     const getReservationsForClass = (classId: string) =>
-        localReservations.filter(r => r.classId === classId && r.status !== 'CANCELED');
+        todaysReservations.filter(r => r.classId === classId && r.status !== 'CANCELED');
 
-    // --- Stats ---
-    const allTodayRes = todaysClasses.flatMap(c => getReservationsForClass(c.id));
-    const totalReserved = allTodayRes.length;
-    const totalAttended = allTodayRes.filter(r =>
+    const totalReserved = todaysReservations.length;
+    const activeReservations = todaysClasses.flatMap(c => getReservationsForClass(c.id));
+    const totalActiveReserved = activeReservations.length;
+    const totalAttended = activeReservations.filter(r =>
         r.attendanceStatus === 'PRESENT' || r.attendanceStatus === 'LATE'
     ).length;
-    const attendanceRate = totalReserved > 0 ? (totalAttended / totalReserved) * 100 : 0;
+    const attendanceRate = totalActiveReserved > 0 ? (totalAttended / totalActiveReserved) * 100 : 0;
 
-    // --- Handlers ---
+    // --- Search Members Hook ---
+    const { data: searchResults = [], isLoading: isSearching } = useQuery({
+        queryKey: ['members', 'search', debouncedSearch],
+        queryFn: () => memberApi.getMembers({ search: debouncedSearch, status: 'ACTIVE' }),
+        enabled: debouncedSearch.length > 0,
+        staleTime: 60 * 1000,
+    });
 
+    const handleWalkIn = () => {
+        if (!selectedClassId || !selectedMemberId) return;
+
+        createReservationByAdmin.mutate({
+            classSessionId: selectedClassId,
+            membershipId: selectedMemberId
+        }, {
+            onSuccess: () => {
+                notifications.show({
+                    title: '등록 완료',
+                    message: '현장 회원이 추가되었습니다.',
+                    color: 'green'
+                });
+                closeWalkIn();
+                setMemberSearch('');
+                setSelectedMemberId(null);
+            },
+            onError: (err: any) => {
+                notifications.show({
+                    title: '등록 실패',
+                    message: err.response?.data?.message || '회원 추가 중 오류가 발생했습니다.',
+                    color: 'red'
+                });
+            }
+        });
+    };
+
+    const openWalkInModal = (classId: string) => {
+        setSelectedClassId(classId);
+        openWalkIn();
+    };
+
+    // ... (handleStatusChange logic stays same)
     const handleStatusChange = (reservationId: string, memberName: string, newStatus: string) => {
-        const isAbsent = newStatus === 'ABSENT';
+        if (newStatus === 'NONE') return;
 
-        // No-Show Policy Check
-        // Use policies.noShow directly
+        const validStatus = newStatus as 'PRESENT' | 'LATE' | 'ABSENT' | 'NOSHOW';
+        const isAbsent = validStatus === 'ABSENT';
+
         if (isAbsent && policies.noShow.enabled) {
             modals.openConfirmModal({
                 title: <Group><IconAlertTriangle color="red" size={20} /><Text fw={700}>노쇼(No-Show) 처리 확인</Text></Group>,
@@ -59,48 +109,51 @@ export default function AttendancePage() {
                 ),
                 labels: { confirm: '결석 처리 및 차감', cancel: '취소' },
                 confirmProps: { color: 'red' },
-                onConfirm: () => updateStatus(reservationId, newStatus)
+                onConfirm: () => updateStatus(reservationId, validStatus)
             });
             return;
         }
-
-        // Normal update
-        updateStatus(reservationId, newStatus);
+        updateStatus(reservationId, validStatus);
     };
 
-    const updateStatus = (id: string, status: string) => {
-        setLocalReservations(prev => prev.map(r =>
-            r.id === id ? { ...r, attendanceStatus: status as any } : r
-        ));
-
-        if (status === 'ABSENT') {
-            notifications.show({
-                title: '처리 완료',
-                message: '결석 처리되었습니다.',
-                color: 'orange'
-            });
-        }
+    const updateStatus = (id: string, status: 'PRESENT' | 'LATE' | 'ABSENT' | 'NOSHOW') => {
+        updateAttendance.mutate({ id, status }, {
+            onSuccess: () => {
+                notifications.show({
+                    title: '처리 완료',
+                    message: status === 'ABSENT' ? '결석 처리되었습니다.' : '출석 상태가 변경되었습니다.',
+                    color: status === 'ABSENT' ? 'orange' : 'green'
+                });
+            },
+            onError: () => {
+                notifications.show({
+                    title: '오류',
+                    message: '상태 변경 중 오류가 발생했습니다.',
+                    color: 'red'
+                });
+            }
+        });
     };
 
-    // --- Manual Add Modal ---
-    const [addModalOpen, { open: openAdd, close: closeAdd }] = useDisclosure(false);
+    if (isScheduleLoading || isReservationsLoading) {
+        return <Center h={400}><Loader /></Center>;
+    }
 
     return (
         <Container size="xl" py="xl">
             {/* Header & Stats */}
             <Group justify="space-between" align="flex-start" mb="xl">
                 <div>
-                    <Title order={2}>출석 체크 (Attendance)</Title>
+                    <Title order={2}>출석 체크</Title>
                     <Text c="dimmed">오늘 예정된 수업의 출석 현황을 관리합니다.</Text>
                 </div>
 
-                {/* Global Controls */}
                 <Card withBorder radius="md" p="sm" bg="gray.0">
                     <Stack gap="xs">
                         <Group justify="space-between">
                             <Text size="xs" fw={700} c="dimmed">TODAY STATUS</Text>
                             <Badge variant="light" color="indigo" size="lg">
-                                {totalAttended} / {totalReserved} 명
+                                {totalAttended} / {totalActiveReserved} 명
                             </Badge>
                         </Group>
                         <Progress value={attendanceRate} size="sm" color="indigo" radius="xl" />
@@ -165,7 +218,7 @@ export default function AttendancePage() {
                                                         <Avatar color="initials" name={r.userName} radius="xl" />
                                                         <div>
                                                             <Text fw={500}>{r.userName}</Text>
-                                                            <Text size="xs" c="dimmed">010-****-1234</Text>
+                                                            <Text size="xs" c="dimmed">{r.userId}</Text>
                                                         </div>
                                                     </Group>
 
@@ -189,14 +242,12 @@ export default function AttendancePage() {
                                             </Card>
                                         ))}
 
-                                        {/* Manual Add Trigger */}
+                                        {/* Walk-in Trigger */}
                                         <Button
                                             variant="subtle"
                                             leftSection={<IconUserPlus size={16} />}
                                             color="gray"
-                                            onClick={() => {
-                                                openAdd();
-                                            }}
+                                            onClick={() => openWalkInModal(cls.id)}
                                         >
                                             현장 회원 추가 (Walk-in)
                                         </Button>
@@ -212,16 +263,39 @@ export default function AttendancePage() {
                 </Card>
             )}
 
-            {/* Manual Add Modal (Stub) */}
-            <Modal opened={addModalOpen} onClose={closeAdd} title="현장 회원 추가">
-                <Select
-                    label="회원 검색"
-                    placeholder="이름 또는 번호"
-                    data={['김철수', '이영희', '박민수']}
-                    searchable
-                    mb="lg"
-                />
-                <Button fullWidth onClick={closeAdd}>수업에 추가</Button>
+            {/* Walk-in Modal */}
+            <Modal opened={walkInModalOpen} onClose={closeWalkIn} title="현장 회원 추가 (Walk-in)" centered>
+                <Stack>
+                    <Select
+                        label="회원 검색"
+                        placeholder="이름 또는 전화번호 뒷자리"
+                        data={searchResults
+                            .filter(m => {
+                                if (!selectedClassId) return true;
+                                const existingMemberIds = getReservationsForClass(selectedClassId).map(r => r.userId);
+                                return !existingMemberIds.includes(m.id);
+                            })
+                            .map(m => ({ value: m.id, label: `${m.name} (${m.phone.slice(-4)})` }))
+                        }
+                        searchable
+                        searchValue={memberSearch}
+                        onSearchChange={setMemberSearch}
+                        value={selectedMemberId}
+                        onChange={setSelectedMemberId}
+                        nothingFoundMessage={isSearching ? "검색 중..." : "회원을 찾을 수 없습니다."}
+                        leftSection={<IconSearch size={16} />}
+                        filter={({ options }) => options} // Server-side filtering
+                    />
+
+                    <Button
+                        fullWidth
+                        onClick={handleWalkIn}
+                        disabled={!selectedMemberId || createReservationByAdmin.isPending}
+                        loading={createReservationByAdmin.isPending}
+                    >
+                        수업에 추가하기
+                    </Button>
+                </Stack>
             </Modal>
         </Container>
     );

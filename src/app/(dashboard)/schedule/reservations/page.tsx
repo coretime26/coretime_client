@@ -15,7 +15,7 @@ import {
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
 import { RESERVATIONS, CLASSES } from '@/features/schedule/model/mock-data';
-import { Reservation, TSID } from '@/features/schedule';
+import { Reservation, TSID, useReservations, useReservationMutations, useWeeklySchedule } from '@/features/schedule';
 import { useMembers, Member } from '@/features/members';
 import AlimTalkModal from '@/components/dashboard/members/AlimTalkModal';
 import { notifications } from '@mantine/notifications';
@@ -29,19 +29,25 @@ export default function ReservationManagementPage() {
     const [filterStatus, setFilterStatus] = useState<string | null>('ALL');
     const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
-    // Local state for reservations to allow add/remove
-    const [reservations, setReservations] = useState<Reservation[]>(RESERVATIONS);
+    // API Hooks
+    const { data: allReservations = [] } = useReservations();
+    const { cancelReservation, createReservationByAdmin } = useReservationMutations();
 
-    // Registration Modal (formerly Admin Override)
+    // For Class Selection in Modal (Fetching this week's classes for simplicity)
+    // Ideallly this should be a dynamic search or filtered by selected date in modal
+    const { data: schedule = [] } = useWeeklySchedule(new Date());
+
+    // Registration Modal
     const [registerOpened, { open: openRegister, close: closeRegister }] = useDisclosure(false);
+    const [selectedMember, setSelectedMember] = useState<string | null>(null);
+    const [selectedClass, setSelectedClass] = useState<string | null>(null);
 
     // AlimTalk Modal
     const [alimTalkOpened, setAlimTalkOpened] = useState(false);
     const [alimTalkTarget, setAlimTalkTarget] = useState<Member | null>(null);
 
     // --- Derived Data ---
-
-    const filteredReservations = reservations.filter(r => {
+    const filteredReservations = allReservations.filter(r => {
         const rDate = dayjs(r.date);
         const inDate = (!dateRange[0] || rDate.isSame(dateRange[0], 'day') || rDate.isAfter(dateRange[0])) &&
             (!dateRange[1] || rDate.isSame(dateRange[1], 'day') || rDate.isBefore(dateRange[1]));
@@ -73,40 +79,37 @@ export default function ReservationManagementPage() {
     // --- Handlers ---
 
     const handleRegisterReservation = () => {
-        // Mock registration logic
-        const newReservation: Reservation = {
-            id: `RES_NEW_${Date.now()}`,
-            classId: 'CLASS_01', // Should be from form
-            userId: 'USER_NEW', // Should be from form
-            userName: '신규 예약자', // Should be from form
-            classTitle: 'Selected Class',
-            instructorName: 'Instructor',
-            date: new Date(),
-            status: 'RESERVED',
-            attendanceStatus: 'NONE',
-            channel: 'ADMIN',
-            createdAt: new Date(),
-            remainingTickets: 9
-        };
+        if (!selectedClass || !selectedMember) {
+            notifications.show({ title: '입력 확인', message: '회원과 수업을 선택해주세요.', color: 'red' });
+            return;
+        }
 
-        // In a real app, gather data from form states. Here we just push a mock.
-        // For the purpose of "Detailed Form", we will just show the UI fields, 
-        // and on submit, add this mock item.
-
-        setReservations(prev => [newReservation, ...prev]);
-        closeRegister();
-        notifications.show({
-            title: '예약 등록 완료',
-            message: '새로운 예약이 등록되었습니다.',
-            color: 'green',
-            icon: <IconCheck size={18} />
+        createReservationByAdmin.mutate({
+            classSessionId: selectedClass,
+            membershipId: selectedMember,
+        }, {
+            onSuccess: () => {
+                closeRegister();
+                notifications.show({
+                    title: '예약 등록 완료',
+                    message: '새로운 예약이 등록되었습니다.',
+                    color: 'green',
+                    icon: <IconCheck size={18} />
+                });
+                setSelectedClass(null);
+                setSelectedMember(null);
+            },
+            onError: () => {
+                notifications.show({ title: '오류', message: '예약 등록 중 오류가 발생했습니다.', color: 'red' });
+            }
         });
     };
 
     const handleOpenAlimTalk = (reservation: Reservation) => {
         // Try to find member in context or mock one
+        // Note: reservation.userId is the memberId
         const member = members.find(m => m.id === reservation.userId) || {
-            id: reservation.userId,
+            id: reservation.userId as any, // Cast if type mismatch
             name: reservation.userName,
             phone: '010-0000-0000', // Fallback
             status: 'ACTIVE',
@@ -129,24 +132,23 @@ export default function ReservationManagementPage() {
         setSelectedRows([]);
     };
 
-    const handleCancelReservation = (id: string) => {
-        setReservations(prev => prev.filter(r => r.id !== id));
-        notifications.show({
-            title: '예약 취소 완료',
-            message: '예약이 정상적으로 취소되었습니다.',
-            color: 'red',
-            icon: <IconTrash size={18} />
+    const handleCancelReservation = (id: string, penalty: boolean = true) => {
+        // penalty logic could be a param to API, but standard cancel is simple DELETE
+        cancelReservation.mutate(id, {
+            onSuccess: () => {
+                notifications.show({
+                    title: '예약 취소 완료',
+                    message: '예약이 정상적으로 취소되었습니다.',
+                    color: 'red',
+                    icon: <IconTrash size={18} />
+                });
+            }
         });
     };
 
     const handleBatchCancel = () => {
-        setReservations(prev => prev.filter(r => !selectedRows.includes(r.id)));
-        notifications.show({
-            title: '일괄 취소 완료',
-            message: `${selectedRows.length}건의 예약이 취소되었습니다.`,
-            color: 'red',
-            icon: <IconTrash size={18} />
-        });
+        // Naive batch implementation
+        selectedRows.forEach(id => handleCancelReservation(id));
         setSelectedRows([]);
     };
 
@@ -162,7 +164,7 @@ export default function ReservationManagementPage() {
             {/* Header */}
             <Group justify="space-between" mb="lg">
                 <Box>
-                    <Title order={2}>예약 관리 (Reservation)</Title>
+                    <Title order={2}>예약 관리</Title>
                     <Text c="dimmed">수업 예약 현황을 조회하고 관리합니다.</Text>
                 </Box>
                 <Button
@@ -270,7 +272,7 @@ export default function ReservationManagementPage() {
                                 </Table.Td>
                                 <Table.Td>
                                     <Text fw={500} size="sm">{r.userName}</Text>
-                                    <Text size="xs" c="dimmed">010-****-1234</Text>
+                                    <Text size="xs" c="dimmed">{r.userId}</Text>
                                 </Table.Td>
                                 <Table.Td>
                                     <Text size="sm" fw={500}>{r.classTitle}</Text>
@@ -299,7 +301,7 @@ export default function ReservationManagementPage() {
                                         </Menu.Target>
                                         <Menu.Dropdown>
                                             <Menu.Item leftSection={<IconTrash size={14} />} color="red" onClick={() => handleCancelReservation(r.id)}>예약 취소 (패널티 O)</Menu.Item>
-                                            <Menu.Item leftSection={<IconTrash size={14} />} onClick={() => handleCancelReservation(r.id)}>예약 취소 (패널티 X)</Menu.Item>
+                                            <Menu.Item leftSection={<IconTrash size={14} />} onClick={() => handleCancelReservation(r.id, false)}>예약 취소 (패널티 X)</Menu.Item>
                                             <Menu.Item leftSection={<IconDeviceMobileMessage size={14} />} onClick={() => handleOpenAlimTalk(r)}>알림톡 발송</Menu.Item>
                                         </Menu.Dropdown>
                                     </Menu>
@@ -329,22 +331,20 @@ export default function ReservationManagementPage() {
                         data={members.map(m => ({ label: `${m.name} (${m.phone})`, value: m.id.toString() }))}
                         searchable
                         required
+                        value={selectedMember}
+                        onChange={setSelectedMember}
                     />
                     <Select
                         label="수업 선택"
-                        placeholder="수업을 선택하세요"
-                        data={CLASSES.map(c => ({ label: `[${dayjs(c.startTime).format('MM/DD HH:mm')}] ${c.title} - ${c.instructorName}`, value: c.id }))}
+                        placeholder="수업을 선택하세요 (이번 주)"
+                        data={schedule.map(c => ({ label: `[${dayjs(c.startTime).format('MM/DD HH:mm')}] ${c.title} - ${c.instructorName}`, value: c.id }))}
                         required
+                        value={selectedClass}
+                        onChange={setSelectedClass}
                     />
                 </SimpleGrid>
 
                 <SimpleGrid cols={2} spacing="md" mb="md">
-                    <DatePickerInput
-                        label="예약 날짜"
-                        placeholder="날짜 선택"
-                        value={new Date()}
-                        required
-                    />
                     <Select
                         label="사용 수강권"
                         placeholder="수강권 선택"

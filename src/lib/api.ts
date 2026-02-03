@@ -259,6 +259,97 @@ export interface TransactionList {
     pagination: Pagination;
 }
 
+// --- Schedule & Reservation Types ---
+
+export interface RoomResult {
+    id: string;
+    name: string;
+    capacity: number;
+}
+
+export interface CreateRoomCommand {
+    name: string;
+    capacity: number;
+}
+
+export interface UpdateRoomCommand {
+    name?: string;
+    capacity?: number;
+}
+
+export interface ScheduleResult {
+    id: string; // classSessionId
+    title: string;
+    startDateTime: string; // ISO-8601
+    endDateTime: string;   // ISO-8601
+    instructorMembershipId: string;
+    instructorName: string; // Derived from API or join
+    roomId: string;
+    roomName: string;       // Derived from API or join
+    maxCapacity: number;
+    currentReservedCount: number;
+    status: 'OPEN' | 'FULL' | 'CLOSED' | 'CANCELED';
+    notes?: string;
+}
+
+export interface CreateScheduleCommand {
+    title: string;
+    instructorMembershipId: string; // ID
+    roomId: string;                 // ID
+    startDateTime: string;          // ISO-8601
+    endDateTime: string;            // ISO-8601
+    maxCapacity: number;
+    notes?: string;
+}
+
+export interface UpdateScheduleCommand {
+    title?: string;
+    instructorMembershipId?: string;
+    roomId?: string;
+    startDateTime?: string;
+    endDateTime?: string;
+    maxCapacity?: number;
+    notes?: string;
+}
+
+export interface ReservationResult {
+    id: string; // reservationId
+    classSessionId: string;
+    classTitle: string;
+    startDateTime: string;
+    endDateTime: string;
+    instructorName: string;
+    roomName: string;
+    membershipId: string;
+    memberName: string;
+    status: 'RESERVED' | 'WAITING' | 'CANCELED' | 'NOSHOW' | 'CANCELED_BY_ADMIN';
+    attendanceStatus: 'NONE' | 'PRESENT' | 'LATE' | 'ABSENT';
+    channel?: string; // Optional context
+    createdAt?: string; // Optional context
+    userId?: string; // client alias for membershipId
+    userName?: string; // client alias for memberName
+}
+
+export interface CreateReservationCommand {
+    classSessionId: string;
+}
+
+export interface CreateReservationByAdminCommand {
+    membershipId: string;
+    classSessionId: string;
+}
+
+export interface UpdateAttendanceCommand {
+    status: 'PRESENT' | 'LATE' | 'ABSENT' | 'NOSHOW';
+}
+
+export interface ReservationQuery {
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+    instructorId?: string;
+}
+
 // --- API Client ---
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL + "/api/v1" || 'http://localhost:8080/api/v1';
@@ -456,6 +547,18 @@ export interface RegisterInstructorCommand {
     memo?: string;
 }
 
+export interface UpdateInstructorCommand {
+    name?: string;
+    email?: string;
+    phone?: string;
+    gender?: 'MALE' | 'FEMALE';
+    birthDate?: string;  // YYYY-MM-DD
+}
+
+export interface UpdateInstructorMemoCommand {
+    memo: string;
+}
+
 // --- API Functions ---
 
 export const authApi = {
@@ -552,6 +655,21 @@ export const authApi = {
     // 5.4 Update Status
     updateInstructorStatus: async (membershipId: string, status: string) => {
         const response = await api.patch<ApiResponse<any>>(`/management/instructors/${membershipId}/management`, { status });
+        return response.data.data;
+    },
+    // 5.5 Update Instructor Info (excluding memo)
+    updateInstructor: async (membershipId: string, command: UpdateInstructorCommand) => {
+        const response = await api.patch<ApiResponse<InstructorDto>>(`/management/instructors/${membershipId}`, command);
+        return response.data.data;
+    },
+    // 5.6 Update Instructor Memo
+    updateInstructorMemo: async (membershipId: string, command: UpdateInstructorMemoCommand) => {
+        const response = await api.patch<ApiResponse<void>>(`/management/instructors/${membershipId}/memo`, command);
+        return response.data.data;
+    },
+    // 5.7 Resign Instructor (퇴사 처리)
+    resignInstructor: async (membershipId: string) => {
+        const response = await api.post<ApiResponse<void>>(`/management/instructors/${membershipId}/resign`);
         return response.data.data;
     },
 
@@ -725,6 +843,97 @@ export const financeApi = {
     },
     getTransactions: async (params: { startDate: string; endDate: string; page?: number; limit?: number; search?: string }) => {
         const response = await api.get<ApiResponse<TransactionList>>('/finance/stats/transactions', { params });
+        return response.data.data;
+    }
+};
+
+// Schedule API
+export const scheduleApi = {
+    // 1.1 Create Schedule
+    create: async (command: CreateScheduleCommand) => {
+        const response = await api.post<ApiResponse<ScheduleResult>>('/schedules', command);
+        return response.data.data;
+    },
+    // 1.2 Update Schedule
+    update: async (classSessionId: string, command: UpdateScheduleCommand) => {
+        const response = await api.patch<ApiResponse<ScheduleResult>>(`/schedules/${classSessionId}`, command);
+        return response.data.data;
+    },
+    // 1.3 Delete Schedule
+    delete: async (classSessionId: string) => {
+        const response = await api.delete<ApiResponse<void>>(`/schedules/${classSessionId}`);
+        return response.data.data;
+    },
+    // 1.4 Get Weekly Schedule (List)
+    getList: async (startDate: string, endDate: string) => {
+        const response = await api.get<ApiResponse<ScheduleResult[]>>('/schedules', {
+            params: { startDate, endDate }
+        });
+        return response.data.data;
+    },
+    // 1.5 Get Detail
+    getDetail: async (classSessionId: string) => {
+        const response = await api.get<ApiResponse<ScheduleResult>>(`/schedules/${classSessionId}`);
+        return response.data.data;
+    },
+};
+
+// Room API
+export const roomApi = {
+    getAll: async () => {
+        const response = await api.get<ApiResponse<RoomResult[]>>('/rooms');
+        return response.data.data;
+    },
+    create: async (command: CreateRoomCommand) => {
+        const response = await api.post<ApiResponse<RoomResult>>('/rooms', command);
+        return response.data.data;
+    },
+    update: async (roomId: string, command: UpdateRoomCommand) => {
+        const response = await api.patch<ApiResponse<RoomResult>>(`/rooms/${roomId}`, command);
+        return response.data.data;
+    },
+    delete: async (roomId: string) => {
+        const response = await api.delete<ApiResponse<void>>(`/rooms/${roomId}`);
+        return response.data; // Void response
+    }
+};
+
+// Reservation API
+export const reservationApi = {
+    // 2.1 Create Reservation (Member)
+    create: async (command: CreateReservationCommand) => {
+        const response = await api.post<ApiResponse<ReservationResult>>('/reservations', command);
+        return response.data.data;
+    },
+    // 2.2 Cancel Reservation
+    cancel: async (reservationId: string) => {
+        const response = await api.delete<ApiResponse<void>>(`/reservations/${reservationId}`);
+        return response.data.data;
+    },
+    // 2.3 Get My Reservations (Member)
+    getMyReservations: async () => {
+        const response = await api.get<ApiResponse<ReservationResult[]>>('/reservations/me');
+        return response.data.data;
+    },
+    // 2.4 Get Session Reservations (Admin/Instructor)
+    getSessionReservations: async (classSessionId: string) => {
+        const response = await api.get<ApiResponse<ReservationResult[]>>(`/reservations/sessions/${classSessionId}`);
+        return response.data.data;
+    },
+    // Admin: Get All Reservations (Assumed/Missing Endpoint)
+    getAll: async (params?: ReservationQuery) => {
+        // [NOTE] This endpoint is not in the provided doc but required for ReservationManager
+        const response = await api.get<ApiResponse<ReservationResult[]>>('/reservations', { params });
+        return response.data.data;
+    },
+    // Admin: Update Attendance
+    updateAttendance: async (reservationId: string, status: 'PRESENT' | 'LATE' | 'ABSENT' | 'NOSHOW') => {
+        const response = await api.patch<ApiResponse<void>>(`/reservations/${reservationId}/attendance`, { status });
+        return response.data.data;
+    },
+    // Admin: Create Reservation
+    createByAdmin: async (command: CreateReservationByAdminCommand) => {
+        const response = await api.post<ApiResponse<ReservationResult>>('/reservations/admin', command);
         return response.data.data;
     }
 };

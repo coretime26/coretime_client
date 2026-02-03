@@ -4,33 +4,35 @@ import { Card, Grid, Skeleton, Stack, Group, Box } from '@mantine/core';
 
 export function ScheduleSkeleton() {
     return (
-        <Stack gap="lg">
-            <Group justify="space-between">
-                <div>
-                    <Skeleton height={28} width={200} mb={8} />
-                    <Skeleton height={14} width={150} />
-                </div>
+        <Stack gap="md" h="100%" w="100%">
+            {/* Header / Toolbar Skeleton */}
+            <Group justify="space-between" mb="sm">
+                <Skeleton height={32} width={200} radius="md" />
                 <Group>
-                    <Skeleton height={36} width={100} radius="md" />
-                    <Skeleton height={36} width={100} radius="md" />
+                    <Skeleton height={32} width={80} radius="md" />
+                    <Skeleton height={32} width={100} radius="md" />
                 </Group>
             </Group>
 
-            {/* Week Grid Skeleton */}
-            <Grid>
-                {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                    <Grid.Col key={day} span="auto" style={{ minWidth: 140 }}>
-                        <Card withBorder padding="sm" h={600} radius="md">
-                            <Stack gap="xs" mb="md">
-                                <Skeleton height={20} width={40} radius="xl" mb="xs" />
-                            </Stack>
+            {/* Calendar Grid Skeleton */}
+            <Grid gutter="xs" style={{ flex: 1 }}>
+                {Array.from({ length: 7 }).map((_, i) => (
+                    <Grid.Col key={i} span="auto" style={{ minWidth: 0, height: '100%' }}>
+                        <Stack h="100%" gap="sm">
+                            {/* Day Header */}
+                            <Box ta="center" py="xs" style={{ borderBottom: '1px solid var(--mantine-color-gray-2)' }}>
+                                <Skeleton height={20} width={40} radius="sm" mx="auto" mb={4} />
+                                <Skeleton height={14} width={30} radius="sm" mx="auto" />
+                            </Box>
 
-                            <Stack gap="sm">
-                                <Skeleton height={100} radius="md" />
-                                <Skeleton height={100} radius="md" />
-                                <Skeleton height={100} radius="md" />
+                            {/* Slots */}
+                            <Stack gap="xs" px={4} style={{ flex: 1 }}>
+                                {/* Randomly place a few skeleton blocks to mimic schedule */}
+                                <Skeleton height={80} radius="md" mt={20} />
+                                <Skeleton height={60} radius="md" mt={40} />
+                                <Skeleton height={90} radius="md" />
                             </Stack>
-                        </Card>
+                        </Stack>
                     </Grid.Col>
                 ))}
             </Grid>
