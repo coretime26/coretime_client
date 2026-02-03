@@ -8,11 +8,11 @@ export interface MemberDto {
     birthDate?: string;
     status: string;
     role: string;
-    createdAt: string; // ISO Date
-    lastAttendanceAt?: string; // ISO Date
+    createdAt: string;
+    lastAttendanceAt?: string;
     pinnedNote?: string;
     profileImageUrl?: string | null;
-    tickets: MemberTicketInfo[]; // [NEW] Active tickets
+    tickets: MemberTicketInfo[];
 }
 
 export interface MemberTicketInfo {
