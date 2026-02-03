@@ -7,6 +7,10 @@ import { getToken } from "next-auth/jwt";
 const PUBLIC_PATHS = [
   "/login",
   "/signup",
+  "/register/profile",
+  "/register/owner",
+  "/register/instructor",
+  "/identity",
   "/oauth/callback",
   "/favicon.ico",
 ];
@@ -35,16 +39,6 @@ function isPublicPath(pathname: string, searchParams: URLSearchParams) {
 
   // Allow pending approval flow: /login?state=pending&accessToken=...
   if (pathname === "/login" && searchParams.has("state") && hasAccessToken) {
-    return true;
-  }
-
-  // Allow onboarding flow: /identity?state=onboarding&accessToken=...
-  if (pathname === "/identity" && searchParams.has("state") && hasAccessToken) {
-    return true;
-  }
-
-  // Allow signup flow: /identity?signupToken=...
-  if (pathname === "/identity" && searchParams.has("signupToken")) {
     return true;
   }
 
