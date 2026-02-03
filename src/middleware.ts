@@ -43,6 +43,11 @@ function isPublicPath(pathname: string, searchParams: URLSearchParams) {
     return true;
   }
 
+  // Allow signup flow: /identity?signupToken=...
+  if (pathname === "/identity" && searchParams.has("signupToken")) {
+    return true;
+  }
+
   return false;
 }
 
@@ -83,8 +88,6 @@ export async function middleware(request: NextRequest) {
 
   if (!token) {
     const loginUrl = new URL("/login", request.url);
-    // 로그인 후 원래 페이지로 돌아오게 하고 싶으면 callbackUrl 붙이기
-    loginUrl.searchParams.set("callbackUrl", nextUrl.pathname + nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -93,7 +96,6 @@ export async function middleware(request: NextRequest) {
    */
   if ((token as any).error === "RefreshAccessTokenError") {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("callbackUrl", nextUrl.pathname + nextUrl.search);
     loginUrl.searchParams.set("error", "session_expired");
     return NextResponse.redirect(loginUrl);
   }
