@@ -38,6 +38,7 @@ interface InstructorListProps {
     isLoading: boolean;
     onAction: (type: 'suspend' | 'withdraw' | 'activate', instructor: InstructorDto) => void;
     onEdit: (instructor: InstructorDto) => void;
+    onRowClick?: (instructor: InstructorDto) => void;
 }
 
 const statusConfig = {
@@ -47,7 +48,7 @@ const statusConfig = {
     WITHDRAWN: { color: 'red', label: '퇴사' }
 };
 
-export default function InstructorList({ instructors, isLoading, onAction, onEdit }: InstructorListProps) {
+export default function InstructorList({ instructors, isLoading, onAction, onEdit, onRowClick }: InstructorListProps) {
     const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<string | null>('ALL');
@@ -111,9 +112,9 @@ export default function InstructorList({ instructors, isLoading, onAction, onEdi
                     </Stack>
                 </Center>
             ) : viewMode === 'table' ? (
-                <InstructorTable instructors={filteredInstructors} onAction={onAction} onEdit={onEdit} />
+                <InstructorTable instructors={filteredInstructors} onAction={onAction} onEdit={onEdit} onRowClick={onRowClick} />
             ) : (
-                <InstructorCards instructors={filteredInstructors} onAction={onAction} onEdit={onEdit} />
+                <InstructorCards instructors={filteredInstructors} onAction={onAction} onEdit={onEdit} onRowClick={onRowClick} />
             )}
         </Stack>
     );
@@ -121,13 +122,14 @@ export default function InstructorList({ instructors, isLoading, onAction, onEdi
 
 // --- Sub Components ---
 
-function InstructorTable({ instructors, onAction, onEdit }: { instructors: InstructorDto[], onAction: any, onEdit: any }) {
+function InstructorTable({ instructors, onAction, onEdit, onRowClick }: { instructors: InstructorDto[], onAction: any, onEdit: any, onRowClick?: any }) {
     return (
         <Card withBorder radius="md" p={0}>
             <Table striped highlightOnHover>
                 <Table.Thead bg="gray.0">
                     <Table.Tr>
                         <Table.Th>강사</Table.Th>
+                        <Table.Th>이메일</Table.Th>
                         <Table.Th>연락처</Table.Th>
                         <Table.Th>상태</Table.Th>
                         <Table.Th>가입일</Table.Th>
@@ -136,18 +138,20 @@ function InstructorTable({ instructors, onAction, onEdit }: { instructors: Instr
                 </Table.Thead>
                 <Table.Tbody>
                     {instructors.map((instructor) => (
-                        <Table.Tr key={instructor.membershipId}>
+                        <Table.Tr
+                            key={instructor.membershipId}
+                            onClick={() => onRowClick?.(instructor)}
+                            style={{ cursor: 'pointer' }}
+                        >
                             <Table.Td>
                                 <Group gap="sm">
                                     <Avatar src={instructor.profileImageUrl} radius="xl" size="md">
                                         {instructor.name.charAt(0)}
                                     </Avatar>
-                                    <div>
-                                        <Text fw={500}>{instructor.name}</Text>
-                                        <Text size="xs" c="dimmed">{instructor.email}</Text>
-                                    </div>
+                                    <Text fw={500}>{instructor.name}</Text>
                                 </Group>
                             </Table.Td>
+                            <Table.Td>{instructor.email || '-'}</Table.Td>
                             <Table.Td>{instructor.phone}</Table.Td>
                             <Table.Td>
                                 <Badge color={statusConfig[instructor.status as keyof typeof statusConfig]?.color || 'gray'} variant="light">
@@ -164,7 +168,7 @@ function InstructorTable({ instructors, onAction, onEdit }: { instructors: Instr
                                         : '-'}
                                 </Text>
                             </Table.Td>
-                            <Table.Td>
+                            <Table.Td onClick={(e) => e.stopPropagation()}>
                                 <InstructorActions instructor={instructor} onAction={onAction} onEdit={onEdit} />
                             </Table.Td>
                         </Table.Tr>
@@ -175,11 +179,18 @@ function InstructorTable({ instructors, onAction, onEdit }: { instructors: Instr
     );
 }
 
-function InstructorCards({ instructors, onAction, onEdit }: { instructors: InstructorDto[], onAction: any, onEdit: any }) {
+function InstructorCards({ instructors, onAction, onEdit, onRowClick }: { instructors: InstructorDto[], onAction: any, onEdit: any, onRowClick?: any }) {
     return (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
             {instructors.map((instructor) => (
-                <Card key={instructor.membershipId} withBorder padding="lg" radius="md">
+                <Card
+                    key={instructor.membershipId}
+                    withBorder
+                    padding="lg"
+                    radius="md"
+                    onClick={() => onRowClick?.(instructor)}
+                    style={{ cursor: 'pointer' }}
+                >
                     <Stack gap="md">
                         <Group>
                             <Avatar src={instructor.profileImageUrl} radius="xl" size="lg">
@@ -206,7 +217,7 @@ function InstructorCards({ instructors, onAction, onEdit }: { instructors: Instr
                             </Text>
                         </div>
 
-                        <Group gap={8} grow>
+                        <Group gap={8} grow onClick={(e) => e.stopPropagation()}>
                             <Button
                                 size="xs"
                                 variant="light"

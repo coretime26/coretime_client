@@ -15,7 +15,9 @@ import {
     IconChevronDown,
     IconBuildingStore,
     IconPlus,
-    IconUserCheck
+    IconUserCheck,
+    IconUserCircle,
+    IconBriefcase
 } from '@tabler/icons-react';
 import { BrandLogo } from '@/components/common/BrandLogo';
 import { useAuth, UserRole } from '@/features/auth';
@@ -182,30 +184,78 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
 
     const handleRegisterBranch = () => {
-        // Direct redirect for Owner, bypassing Identity Check if already logged in
-        if (user) {
-            if (user.role === 'OWNER' || user.role === 'SYSTEM_ADMIN') {
-                router.push('/register/create-center');
-                return;
-            }
-            // If instructor wants to 'register' a branch? Usually they join one. 
-            // Let's assume they want to become an owner or join another. 
-            // For now, default to identity page or instructor invite page.
-            router.push('/register/instructor');
-            return;
-        }
-
-        // Fallback for non-logged in (unreachable here usually)
-        modals.openConfirmModal({
-            title: '새 지점 등록',
+        modals.open({
+            title: '새 지점 등록 - 역할 선택',
             children: (
-                <Text size="sm">
-                    새로운 지점을 등록하시겠습니까? 등록 프로세스를 위해 신원 확인 및 지점 설정 페이지로 이동합니다.
-                </Text>
+                <Stack gap="md">
+                    <Text size="sm">새로운 지점에서의 역할을 선택하세요:</Text>
+                    <Stack gap="xs">
+                        <UnstyledButton
+                            onClick={() => {
+                                modals.closeAll();
+                                router.push('/register/create-center');
+                            }}
+                            style={{
+                                padding: '16px',
+                                borderRadius: '8px',
+                                border: '2px solid var(--mantine-color-gray-3)',
+                                transition: 'all 0.2s',
+                            }}
+                            className="hover-border"
+                        >
+                            <Group>
+                                <Box style={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: '8px',
+                                    backgroundColor: 'var(--mantine-color-blue-1)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <IconBriefcase size={20} color="var(--mantine-color-blue-6)" />
+                                </Box>
+                                <Box style={{ flex: 1 }}>
+                                    <Text fw={600} size="sm">센터장</Text>
+                                    <Text size="xs" c="dimmed">새 지점을 개설합니다</Text>
+                                </Box>
+                            </Group>
+                        </UnstyledButton>
+                        <UnstyledButton
+                            onClick={() => {
+                                modals.closeAll();
+                                router.push('/register/instructor');
+                            }}
+                            style={{
+                                padding: '16px',
+                                borderRadius: '8px',
+                                border: '2px solid var(--mantine-color-gray-3)',
+                                transition: 'all 0.2s',
+                            }}
+                            className="hover-border"
+                        >
+                            <Group>
+                                <Box style={{
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: '8px',
+                                    backgroundColor: 'var(--mantine-color-teal-1)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <IconUserCircle size={20} color="var(--mantine-color-teal-6)" />
+                                </Box>
+                                <Box style={{ flex: 1 }}>
+                                    <Text fw={600} size="sm">강사</Text>
+                                    <Text size="xs" c="dimmed">기존 지점에 강사로 합류합니다</Text>
+                                </Box>
+                            </Group>
+                        </UnstyledButton>
+                    </Stack>
+                </Stack>
             ),
-            labels: { confirm: '이동하기', cancel: '취소' },
-            confirmProps: { color: 'teal' },
-            onConfirm: () => router.push('/identity'),
+            size: 'md',
         });
     };
 
@@ -217,6 +267,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     return (
         <AppShell
+            id="mantine-app-shell"
             header={{ height: 64 }} // Slightly taller header
             navbar={{
                 width: 260,
@@ -279,9 +330,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                         <Menu.Item
                                             key={org.id}
                                             leftSection={<IconBuildingStore size={14} />}
+                                            rightSection={
+                                                org.status === 'PENDING_APPROVAL' || org.status === 'PENDING' ? (
+                                                    <Badge size="xs" color="orange" variant="light">승인대기</Badge>
+                                                ) : null
+                                            }
                                             color={currentBranch === org.name ? 'indigo' : undefined}
                                             bg={currentBranch === org.name ? 'indigo.0' : undefined}
-                                            onClick={() => handleBranchSwitch(org.name)}
+                                            disabled={org.status === 'PENDING_APPROVAL' || org.status === 'PENDING'}
+                                            onClick={() => {
+                                                if (org.status === 'ACTIVE') {
+                                                    handleBranchSwitch(org.name);
+                                                }
+                                            }}
+                                            style={{
+                                                opacity: (org.status === 'PENDING_APPROVAL' || org.status === 'PENDING') ? 0.5 : 1
+                                            }}
                                         >
                                             {org.name}
                                         </Menu.Item>

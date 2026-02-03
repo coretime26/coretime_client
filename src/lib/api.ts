@@ -456,6 +456,18 @@ export interface RegisterInstructorCommand {
     memo?: string;
 }
 
+export interface UpdateInstructorCommand {
+    name?: string;
+    email?: string;
+    phone?: string;
+    gender?: 'MALE' | 'FEMALE';
+    birthDate?: string;  // YYYY-MM-DD
+}
+
+export interface UpdateInstructorMemoCommand {
+    memo: string;
+}
+
 // --- API Functions ---
 
 export const authApi = {
@@ -552,6 +564,21 @@ export const authApi = {
     // 5.4 Update Status
     updateInstructorStatus: async (membershipId: string, status: string) => {
         const response = await api.patch<ApiResponse<any>>(`/management/instructors/${membershipId}/management`, { status });
+        return response.data.data;
+    },
+    // 5.5 Update Instructor Info (excluding memo)
+    updateInstructor: async (membershipId: string, command: UpdateInstructorCommand) => {
+        const response = await api.patch<ApiResponse<InstructorDto>>(`/management/instructors/${membershipId}`, command);
+        return response.data.data;
+    },
+    // 5.6 Update Instructor Memo
+    updateInstructorMemo: async (membershipId: string, command: UpdateInstructorMemoCommand) => {
+        const response = await api.patch<ApiResponse<void>>(`/management/instructors/${membershipId}/memo`, command);
+        return response.data.data;
+    },
+    // 5.7 Resign Instructor (퇴사 처리)
+    resignInstructor: async (membershipId: string) => {
+        const response = await api.post<ApiResponse<void>>(`/management/instructors/${membershipId}/resign`);
         return response.data.data;
     },
 

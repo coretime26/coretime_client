@@ -5,6 +5,7 @@ import { AppShell, Group, Skeleton, Stack, Box } from '@mantine/core';
 export function AppShellSkeleton() {
     return (
         <AppShell
+            id="mantine-app-shell"
             header={{ height: 64 }}
             navbar={{
                 width: 260,

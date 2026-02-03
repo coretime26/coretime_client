@@ -45,6 +45,20 @@ export default function FinanceStatsPage() {
         setDateValue(new Date());
     }, []);
 
+    // Auto-refresh finance data when component mounts or becomes visible
+    useEffect(() => {
+        queryClient.invalidateQueries({ queryKey: ['finance'] });
+    }, [queryClient]);
+
+    // Refetch on window focus to ensure data freshness
+    useEffect(() => {
+        const handleFocus = () => {
+            queryClient.invalidateQueries({ queryKey: ['finance'] });
+        };
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, [queryClient]);
+
     // Calculate Date Range
     const dateRange = useMemo(() => {
         if (!dateValue) return { startDate: '', endDate: '' };
@@ -192,6 +206,7 @@ export default function FinanceStatsPage() {
                                 tickLine="y"
                                 withLegend
                                 legendProps={{ verticalAlign: 'top', height: 30 }}
+                                valueFormatter={(value) => value.toLocaleString('ko-KR')}
                                 activeDotProps={{
                                     r: 6,
                                     style: { cursor: 'pointer' }
