@@ -13,6 +13,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     signupToken: null,
     registrationData: null,
     setSignupToken: (token) => {
+        const currentToken = useAuthStore.getState().signupToken;
+        if (currentToken === token) return;
+
         if (token) {
             sessionStorage.setItem('signupToken', token);
         } else {

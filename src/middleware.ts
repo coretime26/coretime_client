@@ -7,10 +7,6 @@ import { getToken } from "next-auth/jwt";
 const PUBLIC_PATHS = [
   "/login",
   "/signup",
-  "/register/profile",
-  "/register/owner",
-  "/register/instructor",
-  "/identity",
   "/oauth/callback",
   "/favicon.ico",
 ];
@@ -29,11 +25,11 @@ function isPublicPath(pathname: string, searchParams: URLSearchParams) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
   if (isPublicFile(pathname)) return true;
 
-  // Allow OAuth callback URLs with tokens to pass through
-  // This enables backend OAuth2 redirects like /?accessToken=...&refreshToken=...
+  // Allow any path if it has tokens (Backend is managing the flow)
   const hasAccessToken = searchParams.has("accessToken");
-  const hasRefreshToken = searchParams.has("refreshToken");
-  if (hasAccessToken && hasRefreshToken) {
+  const hasSignupToken = searchParams.has("signupToken");
+
+  if (hasAccessToken || hasSignupToken) {
     return true;
   }
 

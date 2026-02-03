@@ -133,10 +133,10 @@ function ProfileContent() {
                 />
                 <TextInput
                     label="휴대폰 번호"
-                    placeholder="010-1234-5678"
+                    placeholder="01012345678"
                     required
                     value={profile.phone}
-                    onChange={(e) => setProfile({ ...profile, phone: e.currentTarget.value })}
+                    onChange={(e) => setProfile({ ...profile, phone: e.currentTarget.value.replace(/[^\d]/g, '') })}
                 />
             </Stack>
 

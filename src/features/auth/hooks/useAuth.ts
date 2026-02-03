@@ -5,7 +5,7 @@ import { authApi } from "../api/auth.api";
 import { useAuthStore } from "../store/auth.store";
 import { JoinOrganizationCommand, RegisterOrganizationCommand, SignUpCommand } from "../api/auth.dto";
 import { User, UserRole } from "../model/types";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { clearSessionCache } from "@/lib/api";
 
 // Helper to normalize role
@@ -39,10 +39,10 @@ export function useAuth() {
 
     // 2. Compute Final User Object
     // Merge session user (basic) with profile (detailed)
-    let user: User | null = null;
+    const user = useMemo(() => {
+        if (!session?.user) return null;
 
-    if (session?.user) {
-        user = {
+        let userObj: User = {
             id: session.user.id,
             name: session.user.name || '',
             email: session.user.email || '',
@@ -54,15 +54,16 @@ export function useAuth() {
         };
 
         if (profile) {
-            user = {
-                ...user,
+            userObj = {
+                ...userObj,
                 name: profile.name,
                 role: normalizeRole(profile.identity),
                 organizationId: profile.organizationId,
-                profileImageUrl: profile.profileImageUrl || user.profileImageUrl
+                profileImageUrl: profile.profileImageUrl || userObj.profileImageUrl
             };
         }
-    }
+        return userObj;
+    }, [session?.user, profile]);
 
     // 3. Sync Session Token to Store (Effect)
     useEffect(() => {
