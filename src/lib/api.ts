@@ -963,7 +963,7 @@ export const queryKeys = {
 };
 
 /**
- * Hook to fetch current user profile with automatic caching
+ * Hook to fetch current user profile with automatic caching 
  */
 export function useUserProfile(options?: Omit<UseQueryOptions<MeResult, Error>, 'queryKey' | 'queryFn'>) {
     return useQuery({
