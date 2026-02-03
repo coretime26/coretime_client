@@ -90,7 +90,7 @@ export default function AttendancePage() {
             {/* Header & Stats */}
             <Group justify="space-between" align="flex-start" mb="xl">
                 <div>
-                    <Title order={2}>출석 체크 (Attendance)</Title>
+                    <Title order={2}>출석 체크</Title>
                     <Text c="dimmed">오늘 예정된 수업의 출석 현황을 관리합니다.</Text>
                 </div>
 

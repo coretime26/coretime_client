@@ -162,7 +162,7 @@ export default function ReservationManagementPage() {
             {/* Header */}
             <Group justify="space-between" mb="lg">
                 <Box>
-                    <Title order={2}>예약 관리 (Reservation)</Title>
+                    <Title order={2}>예약 관리</Title>
                     <Text c="dimmed">수업 예약 현황을 조회하고 관리합니다.</Text>
                 </Box>
                 <Button

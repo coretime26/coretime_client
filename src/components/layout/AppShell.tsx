@@ -79,15 +79,15 @@ const getNavItems = (role: UserRole): NavItem[] => {
                     { label: '매출 통계', link: '/finance/stats' },
                 ]
             },
-            {
-                label: '마케팅/소통',
-                icon: IconSpeakerphone,
-                link: '/marketing',
-                children: [
-                    { label: '메시지 발송', link: '/marketing/messages' },
-                    { label: '알림 설정', link: '/marketing/settings' },
-                ]
-            },
+            // {
+            //     label: '마케팅/소통',
+            //     icon: IconSpeakerphone,
+            //     link: '/marketing',
+            //     children: [
+            //         { label: '메시지 발송', link: '/marketing/messages' },
+            //         { label: '알림 설정', link: '/marketing/settings' },
+            //     ]
+            // },
             {
                 label: '설정',
                 icon: IconSettings,
