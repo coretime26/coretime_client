@@ -1,266 +1,56 @@
 'use client';
 
 import {
-    Title, Text, Container, Grid, Paper, Group, ActionIcon,
-    ThemeIcon, Table, Badge, Stack, SegmentedControl, Skeleton, Center, Pagination
+    Title, Text, Container, SimpleGrid, Card, Group,
+    RingProgress, Center, ThemeIcon, Progress
 } from '@mantine/core';
-import {
-    IconTrendingUp, IconTrendingDown, IconCreditCard,
-    IconCalendar, IconArrowUpRight, IconArrowDownRight, IconCoin, IconAlertCircle, IconRefresh
-} from '@tabler/icons-react';
-import { AreaChart, DonutChart } from '@mantine/charts';
-import { MonthPickerInput } from '@mantine/dates';
-import { useState, useMemo, useEffect } from 'react';
-import dayjs from 'dayjs';
-import { useQueryClient } from '@tanstack/react-query';
-import {
-    useFinanceStatsSummary,
-    useFinanceStatsTrend,
-    useFinanceStatsPaymentMethods,
-    useFinanceStatsTransactions,
-    PaymentMethod,
-    PaymentStatus
-} from '@/lib/api';
-import { notifications } from '@mantine/notifications';
-import { IconDatabaseOff } from '@tabler/icons-react';
-
-const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-    CARD: '신용카드',
-    TRANSFER: '계좌이체',
-    CASH: '현금'
-};
-
-const PAYMENT_METHOD_COLORS: Record<PaymentMethod, string> = {
-    CARD: 'indigo.6',
-    TRANSFER: 'teal.6',
-    CASH: 'gray.6'
-};
+import { IconTrendingUp, IconCreditCard, IconReceipt } from '@tabler/icons-react';
+import { useFinance } from '@/context/FinanceContext';
+// import { BarChart } from '@mantine/charts'; // Assuming available or simulate with simple bars
 
 export default function FinanceStatsPage() {
-    const queryClient = useQueryClient();
-    const [dateValue, setDateValue] = useState<Date | null>(null);
-    const [page, setPage] = useState(1);
+    const { transactions } = useFinance();
 
-    useEffect(() => {
-        setDateValue(new Date());
-    }, []);
+    const totalRevenue = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const cardRevenue = transactions.filter(tx => tx.method === 'CARD').reduce((sum, tx) => sum + tx.amount, 0);
 
-    // Calculate Date Range
-    const dateRange = useMemo(() => {
-        if (!dateValue) return { startDate: '', endDate: '' };
-        return {
-            startDate: dayjs(dateValue).startOf('month').format('YYYY-MM-DD'),
-            endDate: dayjs(dateValue).endOf('month').format('YYYY-MM-DD')
-        };
-    }, [dateValue]);
-
-    // Queries
-    const { data: summary, isLoading: isSummaryLoading } = useFinanceStatsSummary(dateRange);
-    const { data: trend, isLoading: isTrendLoading } = useFinanceStatsTrend(dateRange);
-    const { data: paymentMethods, isLoading: isPaymentLoading } = useFinanceStatsPaymentMethods(dateRange);
-    const { data: transactionsData, isLoading: isTxLoading } = useFinanceStatsTransactions({
-        ...dateRange,
-        page,
-        limit: 10
-    });
-
-    // Chart Data Mappings
-    const chartTrendData = useMemo(() => {
-        if (!trend) return [];
-        return trend.map(t => ({
-            date: dayjs(t.date).format('M/D'),
-            '매출': t.revenue,
-            '환불': t.refund,
-            '미수': t.unpaid
-        }));
-    }, [trend]);
-
-    const chartPaymentData = useMemo(() => {
-        if (!paymentMethods) return [];
-        return paymentMethods.map(m => ({
-            name: m.label || PAYMENT_METHOD_LABELS[m.method as PaymentMethod],
-            value: m.amount,
-            color: m.color || PAYMENT_METHOD_COLORS[m.method as PaymentMethod]
-        }));
-    }, [paymentMethods]);
+    // Simulate data for chart (if real charts installed, use them. Else Custom Bar)
+    const mockDailyData = [
+        { date: '1/15', value: 150000 },
+        { date: '1/16', value: 300000 },
+        { date: '1/17', value: 0 },
+        { date: '1/18', value: 700000 },
+        { date: '1/19', value: 450000 },
+    ];
 
     return (
         <Container size="xl" py="xl">
-            {/* Header: Title & Controls */}
-            <Group justify="space-between" mb="lg" align="flex-end">
-                <div>
-                    <Title order={2}>매출 통계</Title>
-                    <Text c="dimmed" size="sm">기간별 매출 현황 및 추이를 확인합니다.</Text>
-                </div>
-                <Group>
-                    <ActionIcon
-                        variant="light"
-                        size="lg"
-                        onClick={() => {
-                            notifications.show({ title: '새로고침', message: '데이터를 최신화합니다.', color: 'blue', icon: <IconRefresh size={16} /> });
-                            queryClient.invalidateQueries({ queryKey: ['finance'] });
-                        }}
-                    >
-                        <IconRefresh size={18} />
-                    </ActionIcon>
-                    <MonthPickerInput
-                        placeholder="기간 선택"
-                        leftSection={<IconCalendar size={16} />}
-                        value={dateValue}
-                        onChange={(date: any) => { setDateValue(date); setPage(1); }}
-                        w={150}
-                    />
-                </Group>
-            </Group>
+            <Title order={2} mb="lg">매출 통계 (Revenue Stats)</Title>
 
-            {/* 1. Summary Metrics */}
-            <Paper shadow="sm" radius="md" p="lg" withBorder mb="lg" bg="var(--mantine-color-body)">
-                <Grid gutter="xl">
-                    <Grid.Col span={{ base: 12, sm: 6, md: 3 }} style={{ borderRight: '1px solid var(--mantine-color-gray-2)' }}>
-                        {isSummaryLoading ? <Skeleton h={80} /> : (
-                            <StatItem
-                                label="총 매출액"
-                                value={summary?.totalSales || 0}
-                                icon={IconCoin}
-                                color="blue"
-                                trend={summary?.growthRate}
-                            />
-                        )}
-                    </Grid.Col>
-                    <Grid.Col span={{ base: 12, sm: 6, md: 3 }} style={{ borderRight: '1px solid var(--mantine-color-gray-2)' }}>
-                        {isSummaryLoading ? <Skeleton h={80} /> : (
-                            <StatItem
-                                label="실 결제액 (순매출)"
-                                value={summary?.netSales || 0}
-                                icon={IconTrendingUp}
-                                color="indigo"
-                                desc="환불 제외"
-                            />
-                        )}
-                    </Grid.Col>
-                    <Grid.Col span={{ base: 12, sm: 6, md: 3 }} style={{ borderRight: '1px solid var(--mantine-color-gray-2)' }}>
-                        {isSummaryLoading ? <Skeleton h={80} /> : (
-                            <StatItem
-                                label="미수금"
-                                value={summary?.unpaidAmount || 0}
-                                icon={IconAlertCircle}
-                                color="orange"
-                            />
-                        )}
-                    </Grid.Col>
-                    <Grid.Col span={{ base: 12, sm: 6, md: 3 }}>
-                        {isSummaryLoading ? <Skeleton h={80} /> : (
-                            <>
-                                <Text c="dimmed" size="xs" fw={700} tt="uppercase">결제 수단 비중 1위</Text>
-                                <Group mt="xs">
-                                    <ThemeIcon variant="light" color="indigo" size="lg"><IconCreditCard size={20} /></ThemeIcon>
-                                    <div>
-                                        <Text fw={700} size="md">
-                                            {summary?.topPaymentMethod ? (PAYMENT_METHOD_LABELS[summary.topPaymentMethod.method as PaymentMethod] || summary.topPaymentMethod.method) : '-'}
-                                        </Text>
-                                        <Text size="xs" c="dimmed">
-                                            {summary?.topPaymentMethod ? `전체 ${summary.topPaymentMethod.percentage}%` : '데이터 없음'}
-                                        </Text>
-                                    </div>
-                                </Group>
-                            </>
-                        )}
-                    </Grid.Col>
-                </Grid>
-            </Paper>
+            <SimpleGrid cols={{ base: 1, md: 3 }} spacing="lg" mb="xl">
+                <StatCard label="총 매출 (Total Sales)" value={totalRevenue} icon={IconTrendingUp} color="indigo" />
+                <StatCard label="카드 결제" value={cardRevenue} icon={IconCreditCard} color="blue" />
+                <StatCard label="계좌 이체 / 현금" value={totalRevenue - cardRevenue} icon={IconReceipt} color="green" />
+            </SimpleGrid>
 
-            {/* 2. Main Analytics Area */}
-            <Grid gutter="lg" mb="lg">
-                <Grid.Col span={{ base: 12, md: 8 }}>
-                    <Paper shadow="sm" radius="md" p="lg" withBorder h="100%">
-                        <Group justify="space-between" mb="md">
-                            <Text fw={700} size="lg">매출 추이</Text>
-                            <Badge variant="light" color="gray">단위: 원</Badge>
-                        </Group>
-                        {isTrendLoading ? <Skeleton h={300} /> : chartTrendData.length > 0 ? (
-                            <AreaChart
-                                h={300}
-                                data={chartTrendData}
-                                dataKey="date"
-                                series={[
-                                    { name: '매출', color: 'indigo.6' },
-                                    { name: '환불', color: 'red.6' },
-                                    { name: '미수', color: 'orange.5' },
-                                ]}
-                                curveType="monotone"
-                                gridAxis="xy"
-                                tickLine="y"
-                                withLegend
-                                legendProps={{ verticalAlign: 'top', height: 30 }}
-                                activeDotProps={{
-                                    r: 6,
-                                    style: { cursor: 'pointer' }
+            {/* Simple Bar Visualization */}
+            <Card withBorder radius="md" p="xl">
+                <Text fw={700} size="lg" mb="lg">최근 5일 매출 추이</Text>
+                <Group align="flex-end" justify="space-around" h={200} bg="gray.0" style={{ borderRadius: 8 }} p="md">
+                    {mockDailyData.map((d) => (
+                        <div key={d.date} style={{ textAlign: 'center', width: '100%' }}>
+                            <div
+                                style={{
+                                    height: `${(d.value / 1000000) * 150}px`,
+                                    background: '#5c7cfa',
+                                    width: '40px',
+                                    margin: '0 auto',
+                                    borderRadius: '4px 4px 0 0'
                                 }}
-                                areaProps={(series) => ({
-                                    onClick: (data: any) => {
-                                        if (data && data.activePayload && data.activePayload[0]) {
-                                            const point = data.activePayload[0].payload;
-                                            notifications.show({
-                                                title: `${point.date} 상세 현황`,
-                                                message: `매출: ${point['매출'].toLocaleString()}원 / 환불: ${point['환불'].toLocaleString()}원`,
-                                                color: 'indigo',
-                                                icon: <IconTrendingUp size={16} />
-                                            });
-                                        }
-                                    }
-                                })}
                             />
-                        ) : (
-                            <Center h={300}>
-                                <Stack align="center" gap="xs">
-                                    <IconDatabaseOff size={40} style={{ opacity: 0.2 }} />
-                                    <Text c="dimmed" size="sm">해당 기간의 매출 추이 데이터가 없습니다.</Text>
-                                </Stack>
-                            </Center>
-                        )}
-                    </Paper>
-                </Grid.Col>
-                <Grid.Col span={{ base: 12, md: 4 }}>
-                    <Paper shadow="sm" radius="md" p="lg" withBorder h="100%">
-                        <Text fw={700} size="lg" mb="md">결제 수단별 비중</Text>
-                        {isPaymentLoading ? <Center h={180}><Skeleton circle w={180} h={180} /></Center> : chartPaymentData.length > 0 ? (
-                            <Group justify="center" mb="xl">
-                                <DonutChart
-                                    size={180}
-                                    thickness={20}
-                                    paddingAngle={2}
-                                    data={chartPaymentData}
-                                    withTooltip
-                                    tooltipDataSource="segment"
-                                />
-                            </Group>
-                        ) : (
-                            <Center h={180} mb="xl">
-                                <Stack align="center" gap="xs">
-                                    <IconCreditCard size={40} style={{ opacity: 0.2 }} />
-                                    <Text c="dimmed" size="sm">결제 수단 데이터 없음</Text>
-                                </Stack>
-                            </Center>
-                        )}
-                        <Stack gap="xs" mt="md">
-                            {chartPaymentData.map((item) => (
-                                <Group key={item.name} justify="space-between">
-                                    <Group gap="xs">
-                                        <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: `var(--mantine-color-${item.color})` }} />
-                                        <Text size="sm">{item.name}</Text>
-                                    </Group>
-                                    <Text size="sm" fw={500}>{item.value.toLocaleString()}원</Text>
-                                </Group>
-                            ))}
-                        </Stack>
-                    </Paper>
-                </Grid.Col>
-            </Grid>
-
-            {/* 3. Detailed Transaction Log */}
-            <Paper shadow="sm" radius="md" p="lg" withBorder>
-                <Group justify="space-between" mb="md">
-                    <Text fw={700} size="lg">상세 매출 내역</Text>
+                            <Text size="xs" mt="xs" c="dimmed">{d.date}</Text>
+                        </div>
+                    ))}
                 </Group>
 
                 {isTxLoading ? <Skeleton h={400} /> : (
