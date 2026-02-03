@@ -510,7 +510,9 @@ export interface OrganizationResult {
     address: string;
     phone?: string;
     representativeName?: string;
+    category?: string;
     status: 'ACTIVE' | 'PENDING' | 'PENDING_APPROVAL' | 'REJECTED';
+    membershipStatus?: 'PENDING_APPROVAL' | 'ACTIVE' | 'INACTIVE' | 'WITHDRAWN';
 }
 
 // Keeping OrganizationDto alias if needed for backward compat, or just use OrganizationResult

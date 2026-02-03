@@ -326,30 +326,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                                 <Menu.Dropdown>
                                     <Menu.Label>내 지점 목록</Menu.Label>
-                                    {organizations.map(org => (
-                                        <Menu.Item
-                                            key={org.id}
-                                            leftSection={<IconBuildingStore size={14} />}
-                                            rightSection={
-                                                org.status === 'PENDING_APPROVAL' || org.status === 'PENDING' ? (
-                                                    <Badge size="xs" color="orange" variant="light">승인대기</Badge>
-                                                ) : null
-                                            }
-                                            color={currentBranch === org.name ? 'indigo' : undefined}
-                                            bg={currentBranch === org.name ? 'indigo.0' : undefined}
-                                            disabled={org.status === 'PENDING_APPROVAL' || org.status === 'PENDING'}
-                                            onClick={() => {
-                                                if (org.status === 'ACTIVE') {
-                                                    handleBranchSwitch(org.name);
+                                    {organizations.map(org => {
+                                        const isActive = org.status === 'ACTIVE' && org.membershipStatus === 'ACTIVE';
+                                        const isPending = org.status === 'PENDING_APPROVAL' || org.status === 'PENDING' || org.membershipStatus === 'PENDING_APPROVAL';
+
+                                        return (
+                                            <Menu.Item
+                                                key={org.id}
+                                                leftSection={<IconBuildingStore size={14} />}
+                                                rightSection={
+                                                    isPending ? (
+                                                        <Badge size="xs" color="orange" variant="light">승인대기</Badge>
+                                                    ) : org.status === 'REJECTED' ? (
+                                                        <Badge size="xs" color="red" variant="light">거절됨</Badge>
+                                                    ) : null
                                                 }
-                                            }}
-                                            style={{
-                                                opacity: (org.status === 'PENDING_APPROVAL' || org.status === 'PENDING') ? 0.5 : 1
-                                            }}
-                                        >
-                                            {org.name}
-                                        </Menu.Item>
-                                    ))}
+                                                color={currentBranch === org.name ? 'indigo' : undefined}
+                                                bg={currentBranch === org.name ? 'indigo.0' : undefined}
+                                                disabled={!isActive}
+                                                onClick={() => {
+                                                    if (isActive) {
+                                                        handleBranchSwitch(org.name);
+                                                    }
+                                                }}
+                                                style={{
+                                                    opacity: isActive ? 1 : 0.6
+                                                }}
+                                            >
+                                                {org.name}
+                                            </Menu.Item>
+                                        );
+                                    })}
 
                                     <Menu.Divider />
 
