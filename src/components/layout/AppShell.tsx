@@ -57,9 +57,9 @@ const getNavItems = (role: UserRole): NavItem[] => {
                 icon: IconCalendarEvent,
                 link: '/schedule',
                 children: [
-                    { label: '캘린더 뷰', link: '/schedule' },
+                    { label: '수업 관리', link: '/schedule' },
                     { label: '예약 관리', link: '/schedule/reservations' },
-                    { label: '출석 체크', link: '/schedule/attendance' },
+                    { label: '출석 관리', link: '/schedule/attendance' },
                 ]
             },
             {

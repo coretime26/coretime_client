@@ -11,8 +11,10 @@ import { IconPlus } from '@tabler/icons-react';
 import dayjs from 'dayjs';
 
 
-import { useWeeklySchedule, useRooms, useScheduleInstructors } from '@/features/schedule';
+import { useWeeklySchedule, useRooms, useScheduleInstructors, useScheduleMutations } from '@/features/schedule';
+import { CreateScheduleCommand } from '@/lib/api';
 import { ScheduleSkeleton } from '@/features/schedule/components/ScheduleSkeleton';
+import { notifications } from '@mantine/notifications';
 
 export default function CalendarPage() {
     const [selectedInstructors, setSelectedInstructors] = useState<string[]>([]);
@@ -23,6 +25,7 @@ export default function CalendarPage() {
     const { data: schedule = [], isLoading: isScheduleLoading } = useWeeklySchedule(currentDate);
     const { data: rooms = [], isLoading: isRoomsLoading } = useRooms();
     const { data: instructors = [], isLoading: isInstructorsLoading } = useScheduleInstructors();
+    const { createClass, updateClass, deleteClass } = useScheduleMutations();
 
     const isLoading = isScheduleLoading || isRoomsLoading || isInstructorsLoading;
 
@@ -45,19 +48,55 @@ export default function CalendarPage() {
     const [selectedClass, setSelectedClass] = useState<any | null>(null);
 
     const handleAddClass = (values: any) => {
-        console.log('New/Updated Class:', values);
-        // Logic to update mock data state would go here
-        alert(selectedClass ? '수업이 수정되었습니다 (Mock)' : '수업이 등록되었습니다 (Mock)');
-        setSelectedClass(null); // Reset selection
-        close(); // Close modal after submission
+        // Transform form values to API Command
+        const startDateTime = dayjs(values.date).format('YYYY-MM-DD') + 'T' + values.startTime + ':00';
+        const endDateTime = dayjs(values.date).format('YYYY-MM-DD') + 'T' + values.endTime + ':00';
+
+        const command: CreateScheduleCommand = {
+            title: values.title,
+            instructorMembershipId: values.instructorId,
+            roomId: values.roomId,
+            startDateTime,
+            endDateTime,
+            maxCapacity: Number(values.maxCapacity),
+            notes: values.notes
+        };
+
+        if (selectedClass) {
+            // Update
+            updateClass.mutate({ id: selectedClass.id, command }, {
+                onSuccess: () => {
+                    notifications.show({ title: '수정 완료', message: '수업이 수정되었습니다.', color: 'green' });
+                    setSelectedClass(null);
+                    close();
+                },
+                onError: () => notifications.show({ title: '오류', message: '수업 수정에 실패했습니다.', color: 'red' })
+            });
+
+        } else {
+            // Create
+            createClass.mutate(command, {
+                onSuccess: () => {
+                    notifications.show({ title: '등록 완료', message: '새 수업이 등록되었습니다.', color: 'green' });
+                    setSelectedClass(null);
+                    close();
+                },
+                onError: () => notifications.show({ title: '오류', message: '수업 등록에 실패했습니다.', color: 'red' })
+            });
+        }
     };
 
     const handleDeleteClass = () => {
         if (!selectedClass) return;
         if (confirm('정말로 이 수업을 삭제하시겠습니까?')) {
-            alert('수업이 삭제되었습니다 (Mock)');
-            setSelectedClass(null);
-            close();
+            deleteClass.mutate(selectedClass.id, {
+                onSuccess: () => {
+                    notifications.show({ title: '삭제 완료', message: '수업이 삭제되었습니다.', color: 'gray' });
+                    setSelectedClass(null);
+                    close();
+                },
+                onError: () => notifications.show({ title: '오류', message: '삭제에 실패했습니다.', color: 'red' })
+            });
         }
     };
 
@@ -76,12 +115,6 @@ export default function CalendarPage() {
         close();
     };
 
-    // Pass real data to components if available, otherwise fallback or empty
-    // Ideally CalendarSidebar should take rooms/instructors as props, checking props...
-    // The current implementation of Sidebar likely uses mock data directly. 
-    // We should pass them as props if the component accepts them. 
-    // Let's assume for now we just wrap the main content in loading.
-
     if (isLoading) {
         return (
             <Box p="md">
@@ -99,7 +132,8 @@ export default function CalendarPage() {
                 selectedRooms={selectedRooms}
                 currentDate={currentDate}
                 onDateChange={setCurrentDate}
-            // In a real refactor, we'd pass rooms/instructors here
+                instructors={instructors}
+                rooms={rooms}
             />
 
             <Box style={{ flex: 1, height: '100%', overflow: 'hidden' }} p="md">
@@ -128,7 +162,6 @@ export default function CalendarPage() {
                             selectedInstructors={selectedInstructors}
                             selectedRooms={selectedRooms}
                             onClassClick={openEditModal}
-                            // Pass fetched schedule
                             classes={schedule}
                         />
                     ) : (
@@ -137,7 +170,6 @@ export default function CalendarPage() {
                             selectedInstructors={selectedInstructors}
                             selectedRooms={selectedRooms}
                             onClassClick={openEditModal}
-                            // Pass fetched schedule
                             classes={schedule}
                         />
                     )}
@@ -150,6 +182,8 @@ export default function CalendarPage() {
                 onSubmit={handleAddClass}
                 initialData={selectedClass}
                 onDelete={handleDeleteClass}
+                rooms={rooms}
+                instructors={instructors}
             />
         </Group>
     );

@@ -3,18 +3,18 @@
 import {
     Title, Text, Container, Paper, Tabs, Stack, Group,
     TextInput, NumberInput, Button, ColorInput, ActionIcon,
-    Switch, Divider, SimpleGrid, Card, Badge, ThemeIcon
+    Switch, Divider, SimpleGrid, Card, Badge, ThemeIcon, Box
 } from '@mantine/core';
 import { IconTrash, IconPlus, IconSettings, IconClock, IconAlertCircle, IconBuildingStore } from '@tabler/icons-react';
 import { useSettings, ClassCategory } from '@/context/SettingsContext';
-import { Room } from '@/features/schedule';
+import { Room, useRooms, useRoomMutations } from '@/features/schedule';
 import { useState } from 'react';
 import { useForm } from '@mantine/form';
 
 export default function SettingsPage() {
     const {
         categories, addCategory, deleteCategory,
-        rooms, addRoom, deleteRoom,
+        // rooms, addRoom, deleteRoom, // Removed from Context
         policies, updatePolicies
     } = useSettings();
 
@@ -40,9 +40,9 @@ export default function SettingsPage() {
 
                     <Tabs.Panel value="resources" pt="xl">
                         <Stack gap="xl">
-                            <CategoryManager categories={categories} onAdd={addCategory} onDelete={deleteCategory} />
-                            <Divider />
-                            <RoomManager rooms={rooms} onAdd={addRoom} onDelete={deleteRoom} />
+                            {/* <CategoryManager categories={categories} onAdd={addCategory} onDelete={deleteCategory} /> */}
+                            {/* <Divider /> */}
+                            <RoomManager />
                         </Stack>
                     </Tabs.Panel>
 
@@ -55,9 +55,6 @@ export default function SettingsPage() {
     );
 }
 
-// --- Sub Components ---
-
-import { Box } from '@mantine/core';
 
 function CategoryManager({ categories, onAdd, onDelete }: {
     categories: ClassCategory[],
@@ -78,7 +75,7 @@ function CategoryManager({ categories, onAdd, onDelete }: {
         <Paper withBorder p="md" radius="md">
             <Group justify="space-between" mb="md">
                 <Box>
-                    <Title order={4}>수업 카테고리 (Class Categories)</Title>
+                    <Title order={4}>수업 카테고리 </Title>
                     <Text size="sm" c="dimmed">수업 종류와 표시 색상을 관리합니다.</Text>
                 </Box>
             </Group>
@@ -123,26 +120,34 @@ function CategoryManager({ categories, onAdd, onDelete }: {
     );
 }
 
-function RoomManager({ rooms, onAdd, onDelete }: {
-    rooms: Room[],
-    onAdd: (r: Omit<Room, 'id'>) => void,
-    onDelete: (id: string) => void
-}) {
+function RoomManager() {
+    const { data: rooms = [] } = useRooms();
+    const { createRoom, deleteRoom } = useRoomMutations();
+
     const form = useForm({
         initialValues: { name: '', capacity: 8 },
         validate: { name: (val) => val.length > 0 ? null : 'Room name is required' }
     });
 
     const handleSubmit = form.onSubmit((values) => {
-        onAdd(values);
-        form.reset();
+        createRoom.mutate(values, {
+            onSuccess: () => {
+                form.reset();
+            }
+        });
     });
+
+    const handleDelete = (id: string) => {
+        if (confirm('정말로 삭제하시겠습니까?')) {
+            deleteRoom.mutate(id);
+        }
+    }
 
     return (
         <Paper withBorder p="md" radius="md">
             <Group justify="space-between" mb="md">
                 <Box>
-                    <Title order={4}>강의실 마스터 (Room Settings)</Title>
+                    <Title order={4}>강의실 마스터</Title>
                     <Text size="sm" c="dimmed">강의실 목록과 기본 정원을 등록합니다.</Text>
                 </Box>
             </Group>
@@ -173,12 +178,13 @@ function RoomManager({ rooms, onAdd, onDelete }: {
                                     <Text fw={500}>{room.name}</Text>
                                     <Text size="xs" c="dimmed">정원: {room.capacity}명</Text>
                                 </Box>
-                                <ActionIcon color="red" variant="subtle" size="sm" onClick={() => onDelete(room.id)}>
+                                <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDelete(room.id)}>
                                     <IconTrash size={14} />
                                 </ActionIcon>
                             </Group>
                         </Card>
                     ))}
+                    {rooms.length === 0 && <Text c="dimmed" size="sm" ta="center" py="md">등록된 강의실이 없습니다.</Text>}
                 </SimpleGrid>
             </Stack>
         </Paper>
