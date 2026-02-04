@@ -10,6 +10,7 @@ import { Select, Modal, ThemeIcon, Center } from '@mantine/core'; // Added Modal
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks'; // Added useDisclosure
 import { IconCheck, IconX } from '@tabler/icons-react'; // Added IconCheck, IconX, IconAlertCircle
+import { IMaskInput } from 'react-imask';
 
 const CENTER_CATEGORIES = [
     { value: '필라테스', label: '필라테스' },
@@ -61,19 +62,6 @@ export default function RegisterOwnerPage() {
         },
     });
 
-    const handleRegistrationNumberChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        let value = event.target.value.replace(/[^\d]/g, '');
-        if (value.length > 10) value = value.slice(0, 10);
-
-        // Auto format 000-00-00000
-        if (value.length >= 3 && value.length < 5) {
-            value = `${value.slice(0, 3)}-${value.slice(3)}`;
-        } else if (value.length >= 5) {
-            value = `${value.slice(0, 3)}-${value.slice(3, 5)}-${value.slice(5)}`;
-        }
-
-        form.setFieldValue('registrationNumber', value);
-    };
 
     const handleSubmit = async (values: typeof form.values) => {
         setLoading(true);
@@ -153,12 +141,12 @@ export default function RegisterOwnerPage() {
                                     />
 
                                     <TextInput
+                                        component={IMaskInput}
+                                        {...({ mask: '000-00-00000' } as any)}
                                         label="사업자 번호"
                                         placeholder="000-00-00000"
                                         required
-                                        maxLength={12}
                                         {...form.getInputProps('registrationNumber')}
-                                        onChange={handleRegistrationNumberChange}
                                     />
 
                                     <TextInput
@@ -176,6 +164,15 @@ export default function RegisterOwnerPage() {
                                     />
 
                                     <TextInput
+                                        component={IMaskInput}
+                                        {...({
+                                            mask: [
+                                                { mask: '00-000-0000' },
+                                                { mask: '00-0000-0000' },
+                                                { mask: '000-000-0000' },
+                                                { mask: '000-0000-0000' }
+                                            ]
+                                        } as any)}
                                         label="연락처"
                                         placeholder="02-1234-5678"
                                         {...form.getInputProps('phone')}

@@ -5,6 +5,7 @@ import { IconArrowLeft } from '@tabler/icons-react';
 import { useState, Suspense, useEffect } from 'react';
 import { useAuth, UserRole } from '@/features/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { IMaskInput } from 'react-imask';
 
 function ProfileContent() {
     const searchParams = useSearchParams();
@@ -132,11 +133,13 @@ function ProfileContent() {
                 // readOnly // Depending on requirements
                 />
                 <TextInput
+                    component={IMaskInput}
+                    {...({ mask: '000-0000-0000' } as any)}
                     label="휴대폰 번호"
-                    placeholder="01012345678"
+                    placeholder="010-0000-0000"
                     required
                     value={profile.phone}
-                    onChange={(e) => setProfile({ ...profile, phone: e.currentTarget.value.replace(/[^\d]/g, '') })}
+                    onChange={(e) => setProfile({ ...profile, phone: e.currentTarget.value })}
                 />
             </Stack>
 
