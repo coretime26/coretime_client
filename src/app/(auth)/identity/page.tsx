@@ -52,7 +52,7 @@ function IdentityContent() {
     const { data: session } = useSession(); // Access session for token check
 
     const handleRoleSelect = async (role: UserRole) => {
-        if (session?.accessToken) {
+        if (session?.accessToken && session?.refreshToken) {
             sessionStorage.setItem('pendingRole', role || '');
             if (role === 'OWNER') {
                 router.push('/register/owner');
