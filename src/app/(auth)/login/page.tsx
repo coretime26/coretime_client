@@ -102,7 +102,9 @@ function LoginContent() {
     }, [searchParams]);
 
     const handleRegisterNew = () => {
-        router.push('/identity');
+        // Preserve all URL parameters when navigating to identity
+        const params = new URLSearchParams(searchParams.toString());
+        router.push(`/identity?${params.toString()}`);
     };
 
     const handlePendingClose = () => {

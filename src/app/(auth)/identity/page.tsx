@@ -52,37 +52,30 @@ function IdentityContent() {
     const { data: session } = useSession(); // Access session for token check
 
     const handleRoleSelect = async (role: UserRole) => {
-        if (session?.accessToken && session?.refreshToken) {
-            sessionStorage.setItem('pendingRole', role || '');
-            if (role === 'OWNER') {
-                router.push('/register/owner');
-            } else if (role === 'INSTRUCTOR') {
-                router.push('/register/instructor');
-            }
-            return;
-        }
-
-        // Fallback: Check for onboarding state (e.g. if session is lagging but token was injected)
-        const state = searchParams.get('state');
-        if (state === 'onboarding') {
-            sessionStorage.setItem('pendingRole', role || '');
-            if (role === 'OWNER') {
-                router.push('/register/owner');
-            } else if (role === 'INSTRUCTOR') {
-                router.push('/register/instructor');
-            }
-            return;
-        }
-
-        // Default: Proceed to Profile (User not found or not authenticated)
-        console.log("Identity Check: Token not found, proceeding to profile.");
-
-        // Construct new URL parameters for Profile Page
+        // Always construct params to preserve URL data
         const params = new URLSearchParams(searchParams.toString());
         if (role) {
             params.set('role', role);
         }
 
+        sessionStorage.setItem('pendingRole', role || '');
+
+        // Check if we have session or are in a special state
+        const state = searchParams.get('state');
+        const hasSession = session?.accessToken && session?.refreshToken;
+        const canProceedDirectly = hasSession || state === 'onboarding' || state === 'waiting_for_approval';
+
+        if (canProceedDirectly) {
+            if (role === 'OWNER') {
+                router.push(`/register/owner?${params.toString()}`);
+            } else if (role === 'INSTRUCTOR') {
+                router.push(`/register/instructor?${params.toString()}`);
+            }
+            return;
+        }
+
+        // Default: Proceed to Profile (User not found or not authenticated)
+        console.log("Identity Check: Token not found or incomplete state, proceeding to profile.");
         router.push(`/register/profile?${params.toString()}`);
     };
 
