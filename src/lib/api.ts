@@ -143,6 +143,7 @@ export interface Payment {
     paidAt: string;
     refundedAt?: string;
     linkedTicketId?: string | null;
+    productId?: string | null;
 }
 
 // Member Ticket Types

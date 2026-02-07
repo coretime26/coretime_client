@@ -49,7 +49,8 @@ export default function TicketManagementPage() {
         name: '1:1 PT 10회',
         totalCount: 10,
         startDate: null as Date | null,
-        endDate: null as Date | null
+        endDate: null as Date | null,
+        ticketProductId: ''
     });
 
     useEffect(() => {
@@ -127,6 +128,7 @@ export default function TicketManagementPage() {
             setNewTicketData(prev => ({
                 ...prev,
                 name: tx.productName,
+                ticketProductId: tx.productId || '',
                 // Defaults, user can edit
             }));
 
@@ -155,7 +157,8 @@ export default function TicketManagementPage() {
                 name: '1:1 PT 10회',
                 totalCount: 10,
                 startDate: new Date(),
-                endDate: dayjs().add(1, 'year').toDate() // Default 1 year
+                endDate: dayjs().add(1, 'year').toDate(), // Default 1 year
+                ticketProductId: ''
             });
             setSelectedPrePaidTxId(null);
         },
@@ -232,7 +235,7 @@ export default function TicketManagementPage() {
             startDate: dayjs(newTicketData.startDate).format('YYYY-MM-DD'),
             endDate: dayjs(newTicketData.endDate).format('YYYY-MM-DD'),
             paymentId: selectedPrePaidTxId,
-            // ticketProductId? - we could find this from transaction if needed
+            ticketProductId: newTicketData.ticketProductId,
         };
 
         issueMutation.mutate(command);
